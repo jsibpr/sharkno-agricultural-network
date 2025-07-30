@@ -414,13 +414,17 @@ async def search_profiles(
     profiles = await db.profiles.find(query).skip(skip).limit(limit).to_list(limit)
     return [Profile(**profile) for profile in profiles]
 
-# Include router
-app.include_router(api_router)
+# Health check (also add to API router)
+@api_router.get("/health")
+async def api_health_check():
+    return {"status": "healthy", "service": "SharkNo API"}
 
-# Health check
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+# Include router
+app.include_router(api_router)
 
 # Configure logging
 logging.basicConfig(
