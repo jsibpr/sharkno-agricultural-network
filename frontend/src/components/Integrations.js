@@ -256,19 +256,69 @@ const Integrations = ({ user }) => {
 
           {linkedInConnected && (
             <div className="mt-4 pt-4 border-t border-gray-200">
-              <h4 className="font-medium text-gray-900 mb-2">Available Actions:</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="flex items-center p-3 bg-blue-50 rounded-md">
-                  <span className="mr-2">📋</span>
-                  <span className="text-sm">Experience sync</span>
+              <h4 className="font-medium text-gray-900 mb-3">LinkedIn Learning Certificates</h4>
+              
+              {linkedInCertificates.length > 0 ? (
+                <div className="space-y-3">
+                  {linkedInCertificates.map((cert, index) => (
+                    <div key={index} className="bg-green-50 border border-green-200 rounded-md p-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h5 className="font-medium text-green-900">{cert.course_name}</h5>
+                          <p className="text-sm text-green-700">
+                            Completed: {new Date(cert.completion_date).toLocaleDateString()}
+                          </p>
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {cert.skills.map((skill, skillIndex) => (
+                              <span key={skillIndex} className="text-xs bg-green-200 text-green-800 px-2 py-1 rounded">
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="text-green-600">
+                          {cert.verified ? '✅' : '⏳'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    onClick={importLinkedInLearning}
+                    disabled={importingCerts}
+                    className="w-full bg-blue-100 text-blue-800 px-4 py-2 rounded-md hover:bg-blue-200 transition-colors disabled:opacity-50"
+                  >
+                    {importingCerts ? 'Refreshing...' : '🔄 Refresh Certificates'}
+                  </button>
                 </div>
-                <div className="flex items-center p-3 bg-gray-50 rounded-md">
-                  <span className="mr-2">🎓</span>
-                  <span className="text-sm">Education import (Coming soon)</span>
+              ) : (
+                <div className="text-center py-6">
+                  <div className="text-4xl mb-2">📚</div>
+                  <p className="text-gray-600 mb-4">No LinkedIn Learning certificates found</p>
+                  <button
+                    onClick={importLinkedInLearning}
+                    disabled={importingCerts}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {importingCerts ? 'Importing...' : '📚 Import Learning Certificates'}
+                  </button>
                 </div>
-                <div className="flex items-center p-3 bg-gray-50 rounded-md">
-                  <span className="mr-2">🏆</span>
-                  <span className="text-sm">Skills validation (Coming soon)</span>
+              )}
+              
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <h4 className="font-medium text-gray-900 mb-2">Available Actions:</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="flex items-center p-3 bg-blue-50 rounded-md">
+                    <span className="mr-2">📋</span>
+                    <span className="text-sm">Experience sync</span>
+                  </div>
+                  <div className="flex items-center p-3 bg-blue-50 rounded-md">
+                    <span className="mr-2">🎓</span>
+                    <span className="text-sm">Learning certificates</span>
+                  </div>
+                  <div className="flex items-center p-3 bg-gray-50 rounded-md">
+                    <span className="mr-2">🏆</span>
+                    <span className="text-sm">Skills validation (Coming soon)</span>
+                  </div>
                 </div>
               </div>
             </div>
