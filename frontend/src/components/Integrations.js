@@ -44,6 +44,18 @@ const Integrations = ({ user }) => {
         const data = await response.json();
         setLinkedInConnected(true);
         setLinkedInProfile(data);
+        
+        // Also fetch LinkedIn Learning certificates
+        const certResponse = await fetch(`${API}/integrations/linkedin-learning/certificates`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (certResponse.ok) {
+          const certData = await certResponse.json();
+          setLinkedInCertificates(certData.certificates || []);
+        }
       } else {
         setLinkedInConnected(false);
       }
