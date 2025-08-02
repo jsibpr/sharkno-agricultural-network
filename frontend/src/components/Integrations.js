@@ -112,7 +112,37 @@ const Integrations = ({ user }) => {
     }
   };
 
-  const syncLinkedInExperience = async () => {
+  const importLinkedInLearning = async () => {
+    setImportingCerts(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API}/integrations/linkedin-learning/import-certificates`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMessage(`✅ ${data.message}`);
+        setTimeout(() => setMessage(''), 5000);
+        
+        // Refresh certificates
+        checkLinkedInConnection();
+      } else {
+        const error = await response.json();
+        setMessage(`❌ Error: ${error.detail}`);
+        setTimeout(() => setMessage(''), 5000);
+      }
+    } catch (error) {
+      console.error('Error importing LinkedIn Learning certificates:', error);
+      setMessage('❌ Network error while importing certificates');
+      setTimeout(() => setMessage(''), 5000);
+    } finally {
+      setImportingCerts(false);
+    }
+  };
     setSyncing(true);
     try {
       const token = localStorage.getItem('token');
