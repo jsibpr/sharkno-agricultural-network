@@ -144,6 +144,16 @@ function App() {
             } 
           />
           <Route 
+            path="/integrations" 
+            element={
+              user ? (
+                <Integrations user={user} />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            } 
+          />
+          <Route 
             path="/" 
             element={
               user ? (
