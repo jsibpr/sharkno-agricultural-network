@@ -13,7 +13,8 @@ const Navigation = ({ user, onLogout }) => {
     { path: '/profile', label: 'Profile', icon: '👤' },
     { path: '/services', label: 'Services', icon: '🛠️' },
     { path: '/validations', label: 'Validations', icon: '✅' },
-    { path: '/search', label: 'Search', icon: '🔍' }
+    { path: '/search', label: 'Search', icon: '🔍' },
+    { path: '/integrations', label: 'Integrations', icon: '🔗' }
   ];
 
   return (
