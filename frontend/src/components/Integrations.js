@@ -143,6 +143,8 @@ const Integrations = ({ user }) => {
       setImportingCerts(false);
     }
   };
+
+  const syncLinkedInExperience = async () => {
     setSyncing(true);
     try {
       const token = localStorage.getItem('token');
