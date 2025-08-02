@@ -284,6 +284,193 @@ async def login(user_data: UserLogin):
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     return current_user
 
+# LinkedIn OAuth endpoints
+class LinkedInProfile(BaseModel):
+    linkedin_id: str
+    first_name: str
+    last_name: str
+    email: str
+    profile_picture: Optional[str] = None
+    headline: Optional[str] = None
+    summary: Optional[str] = None
+    positions: List[Dict] = []
+    connected_at: datetime = Field(default_factory=datetime.utcnow)
+
+@api_router.get("/auth/linkedin")
+async def linkedin_auth(current_user: User = Depends(get_current_user)):
+    """Initiate LinkedIn OAuth flow"""
+    params = {
+        'response_type': 'code',
+        'client_id': LINKEDIN_CLIENT_ID,
+        'redirect_uri': LINKEDIN_REDIRECT_URI,
+        'scope': 'r_liteprofile r_emailaddress',
+        'state': current_user.id  # Use user ID as state for security
+    }
+    
+    linkedin_auth_url = f"https://www.linkedin.com/oauth/v2/authorization?{urlencode(params)}"
+    return {"auth_url": linkedin_auth_url}
+
+@api_router.get("/auth/linkedin/callback")
+async def linkedin_callback(request: Request, code: str, state: str):
+    """Handle LinkedIn OAuth callback"""
+    try:
+        # Verify state matches a valid user
+        user = await db.users.find_one({"id": state})
+        if not user:
+            raise HTTPException(status_code=400, detail="Invalid state parameter")
+        
+        # Exchange code for access token
+        token_data = {
+            'grant_type': 'authorization_code',
+            'code': code,
+            'redirect_uri': LINKEDIN_REDIRECT_URI,
+            'client_id': LINKEDIN_CLIENT_ID,
+            'client_secret': LINKEDIN_CLIENT_SECRET
+        }
+        
+        token_response = requests.post(
+            'https://www.linkedin.com/oauth/v2/accessToken',
+            data=token_data,
+            headers={'Content-Type': 'application/x-www-form-urlencoded'}
+        )
+        
+        if token_response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Failed to get access token")
+        
+        access_token = token_response.json()['access_token']
+        
+        # Get LinkedIn profile data
+        headers = {'Authorization': f'Bearer {access_token}'}
+        
+        # Get basic profile
+        profile_response = requests.get(
+            'https://api.linkedin.com/v2/people/~?projection=(id,firstName,lastName,profilePicture(displayImage~:playableStreams))',
+            headers=headers
+        )
+        
+        # Get email
+        email_response = requests.get(
+            'https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))',
+            headers=headers
+        )
+        
+        if profile_response.status_code != 200 or email_response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Failed to get LinkedIn profile")
+        
+        profile_data = profile_response.json()
+        email_data = email_response.json()
+        
+        # Extract profile information
+        linkedin_profile = {
+            "linkedin_id": profile_data['id'],
+            "first_name": profile_data['firstName']['localized'].get('en_US', ''),
+            "last_name": profile_data['lastName']['localized'].get('en_US', ''),
+            "email": email_data['elements'][0]['handle~']['emailAddress'] if email_data.get('elements') else '',
+            "profile_picture": None,  # We'll implement this later
+            "headline": "",  # We'll get this from positions endpoint
+            "summary": "",
+            "positions": [],  # We'll get this from positions endpoint
+            "connected_at": datetime.utcnow()
+        }
+        
+        # Store LinkedIn profile data
+        await db.linkedin_profiles.update_one(
+            {"user_id": state},
+            {"$set": {**linkedin_profile, "user_id": state}},
+            upsert=True
+        )
+        
+        # Update user to indicate LinkedIn is connected
+        await db.users.update_one(
+            {"id": state},
+            {"$set": {"linkedin_connected": True, "linkedin_updated_at": datetime.utcnow()}}
+        )
+        
+        # Redirect back to frontend with success
+        frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3001')
+        return RedirectResponse(url=f"{frontend_url}/profile?linkedin=connected")
+        
+    except Exception as e:
+        logger.error(f"LinkedIn callback error: {e}")
+        frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3001')
+        return RedirectResponse(url=f"{frontend_url}/profile?linkedin=error")
+
+@api_router.get("/integrations/linkedin/profile")
+async def get_linkedin_profile(current_user: User = Depends(get_current_user)):
+    """Get user's connected LinkedIn profile data"""
+    linkedin_data = await db.linkedin_profiles.find_one({"user_id": current_user.id})
+    
+    if not linkedin_data:
+        raise HTTPException(status_code=404, detail="LinkedIn profile not connected")
+    
+    # Remove MongoDB _id field
+    linkedin_data.pop('_id', None)
+    return linkedin_data
+
+@api_router.delete("/integrations/linkedin")
+async def disconnect_linkedin(current_user: User = Depends(get_current_user)):
+    """Disconnect LinkedIn integration"""
+    # Remove LinkedIn profile data
+    await db.linkedin_profiles.delete_one({"user_id": current_user.id})
+    
+    # Update user status
+    await db.users.update_one(
+        {"id": current_user.id},
+        {"$set": {"linkedin_connected": False}, "$unset": {"linkedin_updated_at": 1}}
+    )
+    
+    return {"message": "LinkedIn integration disconnected successfully"}
+
+@api_router.post("/integrations/linkedin/sync-experience")
+async def sync_linkedin_experience(current_user: User = Depends(get_current_user)):
+    """Sync LinkedIn experience to user profile"""
+    # Get LinkedIn profile data
+    linkedin_data = await db.linkedin_profiles.find_one({"user_id": current_user.id})
+    
+    if not linkedin_data:
+        raise HTTPException(status_code=404, detail="LinkedIn profile not connected")
+    
+    # Get user's current profile
+    profile = await db.profiles.find_one({"user_id": current_user.id})
+    
+    if not profile:
+        raise HTTPException(status_code=404, detail="User profile not found")
+    
+    # Convert LinkedIn positions to our experience format
+    linkedin_experiences = []
+    for position in linkedin_data.get('positions', []):
+        experience = {
+            "id": str(uuid.uuid4()),
+            "position": position.get('title', ''),
+            "company": position.get('companyName', ''),
+            "start_date": position.get('startDate', datetime.utcnow()),
+            "end_date": position.get('endDate') if not position.get('current', False) else None,
+            "description": position.get('summary', ''),
+            "location": position.get('location', ''),
+            "still_working": position.get('current', False),
+            "source": "linkedin"
+        }
+        linkedin_experiences.append(experience)
+    
+    # Update profile with LinkedIn experiences
+    existing_experience = profile.get('experience', [])
+    
+    # Remove any existing LinkedIn-sourced experiences
+    existing_experience = [exp for exp in existing_experience if exp.get('source') != 'linkedin']
+    
+    # Add new LinkedIn experiences
+    updated_experience = existing_experience + linkedin_experiences
+    
+    await db.profiles.update_one(
+        {"user_id": current_user.id},
+        {"$set": {"experience": updated_experience, "linkedin_synced_at": datetime.utcnow()}}
+    )
+    
+    return {
+        "message": f"Successfully synced {len(linkedin_experiences)} experiences from LinkedIn",
+        "experiences_added": len(linkedin_experiences)
+    }
+
 # Profile endpoints
 @api_router.post("/profiles", response_model=Profile)
 async def create_profile(profile_data: ProfileBase, current_user: User = Depends(get_current_user)):
