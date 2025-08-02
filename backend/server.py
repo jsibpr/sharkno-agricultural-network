@@ -32,6 +32,11 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key-here')
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = 24
 
+# LinkedIn OAuth Configuration
+LINKEDIN_CLIENT_ID = os.environ.get('LINKEDIN_CLIENT_ID', 'your-linkedin-client-id')
+LINKEDIN_CLIENT_SECRET = os.environ.get('LINKEDIN_CLIENT_SECRET', 'your-linkedin-client-secret')
+LINKEDIN_REDIRECT_URI = os.environ.get('LINKEDIN_REDIRECT_URI', 'http://localhost:8001/api/auth/linkedin/callback')
+
 # Create FastAPI app
 app = FastAPI(title="SharkNo Agricultural Professional Network")
 api_router = APIRouter(prefix="/api")
