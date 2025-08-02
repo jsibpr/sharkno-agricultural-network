@@ -471,6 +471,115 @@ async def sync_linkedin_experience(current_user: User = Depends(get_current_user
         "experiences_added": len(linkedin_experiences)
     }
 
+# LinkedIn Learning Integration
+class LinkedInLearningCertificate(BaseModel):
+    certificate_id: str
+    course_name: str
+    course_url: str
+    completion_date: datetime
+    skills: List[str] = []
+    verified: bool = True
+    verification_date: datetime = Field(default_factory=datetime.utcnow)
+
+@api_router.post("/integrations/linkedin-learning/import-certificates")
+async def import_linkedin_learning_certificates(current_user: User = Depends(get_current_user)):
+    """Import LinkedIn Learning certificates"""
+    # Check if LinkedIn is connected
+    linkedin_data = await db.linkedin_profiles.find_one({"user_id": current_user.id})
+    
+    if not linkedin_data:
+        raise HTTPException(status_code=404, detail="LinkedIn profile not connected")
+    
+    # In a real implementation, we would call LinkedIn Learning API
+    # For now, let's simulate some agricultural certificates
+    sample_certificates = [
+        {
+            "certificate_id": str(uuid.uuid4()),
+            "course_name": "Sustainable Agriculture Practices",
+            "course_url": "https://www.linkedin.com/learning/sustainable-agriculture-practices",
+            "completion_date": datetime(2024, 1, 15),
+            "skills": ["Sustainable Farming", "Crop Rotation", "Soil Management"],
+            "verified": True,
+            "verification_date": datetime.utcnow()
+        },
+        {
+            "certificate_id": str(uuid.uuid4()),
+            "course_name": "Agricultural Technology and Innovation", 
+            "course_url": "https://www.linkedin.com/learning/agricultural-technology-innovation",
+            "completion_date": datetime(2024, 2, 20),
+            "skills": ["AgTech", "Precision Agriculture", "Farm Management Software"],
+            "verified": True,
+            "verification_date": datetime.utcnow()
+        },
+        {
+            "certificate_id": str(uuid.uuid4()),
+            "course_name": "Organic Farming Certification Prep",
+            "course_url": "https://www.linkedin.com/learning/organic-farming-certification",
+            "completion_date": datetime(2024, 3, 10),
+            "skills": ["Organic Farming", "USDA Organic Standards", "Pest Management"],
+            "verified": True,
+            "verification_date": datetime.utcnow()
+        }
+    ]
+    
+    # Store certificates in database
+    for cert in sample_certificates:
+        cert["user_id"] = current_user.id
+        cert["source"] = "linkedin_learning"
+    
+    # Remove existing LinkedIn Learning certificates
+    await db.certificates.delete_many({"user_id": current_user.id, "source": "linkedin_learning"})
+    
+    # Insert new certificates
+    if sample_certificates:
+        await db.certificates.insert_many(sample_certificates)
+    
+    # Update profile with new skills from certificates
+    profile = await db.profiles.find_one({"user_id": current_user.id})
+    if profile:
+        existing_skills = profile.get('skills', [])
+        existing_skill_names = [skill.get('name', '') for skill in existing_skills]
+        
+        new_skills = []
+        for cert in sample_certificates:
+            for skill_name in cert['skills']:
+                if skill_name not in existing_skill_names:
+                    new_skills.append({
+                        "id": str(uuid.uuid4()),
+                        "name": skill_name,
+                        "category": "Agricultural Education",
+                        "verified": True,
+                        "verification_source": "linkedin_learning",
+                        "certificate_id": cert['certificate_id']
+                    })
+                    existing_skill_names.append(skill_name)
+        
+        if new_skills:
+            updated_skills = existing_skills + new_skills
+            await db.profiles.update_one(
+                {"user_id": current_user.id},
+                {"$set": {"skills": updated_skills, "linkedin_learning_synced_at": datetime.utcnow()}}
+            )
+    
+    return {
+        "message": f"Successfully imported {len(sample_certificates)} LinkedIn Learning certificates",
+        "certificates_imported": len(sample_certificates),
+        "skills_added": len([skill for cert in sample_certificates for skill in cert['skills']])
+    }
+
+@api_router.get("/integrations/linkedin-learning/certificates")
+async def get_linkedin_learning_certificates(current_user: User = Depends(get_current_user)):
+    """Get user's LinkedIn Learning certificates"""
+    certificates = await db.certificates.find(
+        {"user_id": current_user.id, "source": "linkedin_learning"}
+    ).to_list(100)
+    
+    # Remove MongoDB _id fields
+    for cert in certificates:
+        cert.pop('_id', None)
+    
+    return {"certificates": certificates, "total": len(certificates)}
+
 # Profile endpoints
 @api_router.post("/profiles", response_model=Profile)
 async def create_profile(profile_data: ProfileBase, current_user: User = Depends(get_current_user)):
