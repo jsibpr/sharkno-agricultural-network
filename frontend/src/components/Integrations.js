@@ -7,7 +7,9 @@ const API = `${BACKEND_URL}/api`;
 const Integrations = ({ user }) => {
   const [linkedInConnected, setLinkedInConnected] = useState(false);
   const [linkedInProfile, setLinkedInProfile] = useState(null);
+  const [linkedInCertificates, setLinkedInCertificates] = useState([]);
   const [syncing, setSyncing] = useState(false);
+  const [importingCerts, setImportingCerts] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [searchParams] = useSearchParams();
