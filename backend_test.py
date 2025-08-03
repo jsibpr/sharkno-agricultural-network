@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any
 
 class SharkNoAPITester:
-    def __init__(self, base_url="https://68b230fc-c2d1-4258-9d29-a345cf6f6a9b.preview.emergentagent.com"):
+    def __init__(self, base_url="https://a9c611d5-645d-4aea-9fa4-24b37432de0d.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.token = None
