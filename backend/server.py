@@ -489,8 +489,9 @@ async def import_linkedin_learning_certificates(current_user: User = Depends(get
     # Check if LinkedIn is connected
     linkedin_data = await db.linkedin_profiles.find_one({"user_id": current_user.id})
     
+    # Allow mock certificates even without LinkedIn connection for demo purposes
     if not linkedin_data:
-        raise HTTPException(status_code=404, detail="LinkedIn profile not connected")
+        print(f"No LinkedIn profile found for user {current_user.id}, creating demo mock data")
     
     # In a real implementation, we would call LinkedIn Learning API
     # For now, let's simulate some agricultural certificates
