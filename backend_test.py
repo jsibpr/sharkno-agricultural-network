@@ -678,7 +678,8 @@ class SharkNoAPITester:
             "still_active": False,
             "skills_demonstrated": ["Irrigation Design", "Water Management", "Project Management", "Agricultural Engineering"],
             "collaborators": [],  # Will be populated by the API
-            "project_results": "Successfully reduced water usage by 30% while increasing crop yield by 15%"
+            "project_results": "Successfully reduced water usage by 30% while increasing crop yield by 15%",
+            "created_by": self.user_id  # Required field
         }
 
         success, response, status = self.make_request('POST', 'projects', project_data, 200)
