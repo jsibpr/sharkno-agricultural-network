@@ -9,6 +9,7 @@ import Services from './components/Services';
 import Validations from './components/Validations';
 import Search from './components/Search';
 import Integrations from './components/Integrations';
+import Privacy from './components/Privacy';
 import Navigation from './components/Navigation';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
