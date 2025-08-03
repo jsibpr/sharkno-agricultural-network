@@ -418,7 +418,85 @@ class SharkNoAPITester:
             else:
                 self.log_test(f"Search Profiles: {query}", False, f"Status: {status}")
 
-    def test_linkedin_learning_import_certificates(self):
+    def setup_mock_linkedin_profile(self):
+        """Set up a mock LinkedIn profile for testing"""
+        try:
+            # Connect to MongoDB directly to insert mock LinkedIn profile
+            mongo_client = pymongo.MongoClient("mongodb://localhost:27017")
+            db = mongo_client["sharkno_agricultural"]
+            
+            # Create mock LinkedIn profile
+            linkedin_profile = {
+                "user_id": self.user_id,
+                "linkedin_id": "test-linkedin-id-123",
+                "first_name": "John",
+                "last_name": "Farmer", 
+                "email": self.test_data['main_user']['email'],
+                "profile_picture": None,
+                "headline": "Agricultural Professional",
+                "summary": "Experienced farmer and consultant",
+                "positions": [],
+                "connected_at": datetime.utcnow()
+            }
+            
+            # Insert or update the LinkedIn profile
+            db.linkedin_profiles.update_one(
+                {"user_id": self.user_id},
+                {"$set": linkedin_profile},
+                upsert=True
+            )
+            
+            # Update user to indicate LinkedIn is connected
+            db.users.update_one(
+                {"id": self.user_id},
+                {"$set": {"linkedin_connected": True, "linkedin_updated_at": datetime.utcnow()}}
+            )
+            
+            mongo_client.close()
+            return True
+            
+        except Exception as e:
+            print(f"Failed to setup mock LinkedIn profile: {e}")
+            return False
+
+    def test_linkedin_learning_import_with_connection(self):
+        """Test LinkedIn Learning certificate import with LinkedIn connection"""
+        # First set up mock LinkedIn profile
+        if not self.setup_mock_linkedin_profile():
+            self.log_test("LinkedIn Learning Import (With Connection)", False, 
+                        "Failed to setup mock LinkedIn profile")
+            return False
+        
+        # Now try to import certificates
+        success, response, status = self.make_request('POST', 'integrations/linkedin-learning/import-certificates', expected_status=200)
+        
+        if success:
+            # Verify the response structure
+            expected_keys = ['message', 'certificates_imported', 'skills_added']
+            has_all_keys = all(key in response for key in expected_keys)
+            
+            if has_all_keys:
+                certificates_count = response.get('certificates_imported', 0)
+                skills_count = response.get('skills_added', 0)
+                
+                # Verify we got the expected 3 certificates
+                if certificates_count == 3:
+                    self.log_test("LinkedIn Learning Import (With Connection)", True, 
+                                f"Imported {certificates_count} certificates, added {skills_count} skills")
+                    self.test_data['linkedin_certificates_imported'] = True
+                    return True
+                else:
+                    self.log_test("LinkedIn Learning Import (With Connection)", False, 
+                                f"Expected 3 certificates, got {certificates_count}")
+                    return False
+            else:
+                self.log_test("LinkedIn Learning Import (With Connection)", False, 
+                            f"Missing expected keys in response: {response}")
+                return False
+        else:
+            self.log_test("LinkedIn Learning Import (With Connection)", False, 
+                        f"Status: {status}, Response: {response}")
+            return False
         """Test LinkedIn Learning certificate import functionality"""
         # First, we need to create a mock LinkedIn profile connection
         # Since the endpoint requires a LinkedIn profile to be connected,
