@@ -434,6 +434,21 @@ const Integrations = ({ user }) => {
           </div>
         </div>
       </div>
+
+      {/* Privacy Policy Link for Compliance */}
+      <div className="mt-6 text-center border-t pt-4">
+        <p className="text-sm text-gray-600">
+          By connecting external accounts, you agree to our{' '}
+          <a 
+            href="/privacy" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-green-600 hover:text-green-700 underline"
+          >
+            Privacy Policy
+          </a>
+        </p>
+      </div>
     </div>
   );
 };
