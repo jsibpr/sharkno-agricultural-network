@@ -392,8 +392,8 @@ async def linkedin_callback(request: Request, code: str, state: str):
         
     except Exception as e:
         logger.error(f"LinkedIn callback error: {e}")
-        frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3001')
-        return RedirectResponse(url=f"{frontend_url}/profile?linkedin=error")
+        frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3002')
+        return RedirectResponse(url=f"{frontend_url}/integrations?linkedin=error")
 
 @api_router.get("/integrations/linkedin/profile")
 async def get_linkedin_profile(current_user: User = Depends(get_current_user)):
