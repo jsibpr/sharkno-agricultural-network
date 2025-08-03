@@ -820,6 +820,7 @@ async def approve_project_validation(validation_id: str, current_user: User = De
     return {"message": "Project validation approved"}
 
 # Enhanced Validation endpoints (keeping original for backward compatibility)
+# Enhanced Validation endpoints (keeping original for backward compatibility)
 @api_router.post("/validations", response_model=ValidationRequest)
 async def create_validation(validation_data: ValidationRequest, current_user: User = Depends(get_current_user)):
     validation = ValidationRequest(**validation_data.dict())
@@ -831,6 +832,12 @@ async def create_validation(validation_data: ValidationRequest, current_user: Us
 @api_router.get("/validations", response_model=List[ValidationRequest])
 async def get_validations(current_user: User = Depends(get_current_user)):
     validations = await db.validations.find({"validated_user_id": current_user.id}).to_list(100)
+    return [ValidationRequest(**validation) for validation in validations]
+
+@api_router.get("/validations/given", response_model=List[ValidationRequest])
+async def get_given_validations(current_user: User = Depends(get_current_user)):
+    """Get validations given by current user"""
+    validations = await db.validations.find({"validator_id": current_user.id}).to_list(100)
     return [ValidationRequest(**validation) for validation in validations]
 
 @api_router.put("/validations/{validation_id}/approve")
@@ -848,6 +855,70 @@ async def approve_validation(validation_id: str, current_user: User = Depends(ge
     )
     
     return {"message": "Validation approved"}
+
+# Search endpoint for finding project collaborators
+@api_router.get("/search/collaborators", response_model=List[dict])
+async def search_potential_collaborators(
+    q: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    limit: int = 10
+):
+    """Search for users to add as project collaborators"""
+    query = {"id": {"$ne": current_user.id}}  # Exclude current user
+    
+    if q:
+        # Search in user info
+        users = await db.users.find({
+            "$and": [
+                query,
+                {
+                    "$or": [
+                        {"name": {"$regex": q, "$options": "i"}},
+                        {"email": {"$regex": q, "$options": "i"}}
+                    ]
+                }
+            ]
+        }).limit(limit).to_list(limit)
+        
+        # Also search in profiles
+        profiles = await db.profiles.find({
+            "$or": [
+                {"title": {"$regex": q, "$options": "i"}},
+                {"bio": {"$regex": q, "$options": "i"}},
+                {"skills.name": {"$regex": q, "$options": "i"}}
+            ]
+        }).limit(limit).to_list(limit)
+        
+        # Combine results
+        user_results = []
+        for user in users:
+            profile = await db.profiles.find_one({"user_id": user["id"]})
+            user_results.append({
+                "user_id": user["id"],
+                "name": user["name"],
+                "email": user["email"],
+                "role": user["role"],
+                "title": profile.get("title", "") if profile else "",
+                "bio": profile.get("bio", "") if profile else ""
+            })
+        
+        for profile in profiles:
+            # Check if user not already in results
+            if not any(u["user_id"] == profile["user_id"] for u in user_results):
+                user = await db.users.find_one({"id": profile["user_id"]})
+                if user:
+                    user_results.append({
+                        "user_id": user["id"],
+                        "name": user["name"],
+                        "email": user["email"],
+                        "role": user["role"],
+                        "title": profile.get("title", ""),
+                        "bio": profile.get("bio", "")
+                    })
+        
+        return user_results[:limit]
+    
+    return []
 
 # Reviews endpoints
 @api_router.post("/reviews", response_model=Review)
