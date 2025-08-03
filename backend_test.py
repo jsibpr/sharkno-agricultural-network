@@ -822,6 +822,7 @@ class SharkNoAPITester:
 
         validation_data = {
             "project_experience_id": self.test_data['project_id'],
+            "validator_id": self.user_id,  # Required field
             "validated_user_id": self.test_data['invited_collaborator_id'],
             "project_role": "Irrigation Specialist",
             "skills_validated": ["Irrigation Design", "Water Management", "Technical Problem Solving"],
