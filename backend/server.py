@@ -631,8 +631,9 @@ async def update_profile(user_id: str, profile_data: ProfileBase, current_user: 
 # Services endpoints
 @api_router.post("/services", response_model=Service)
 async def create_service(service_data: ServiceBase, current_user: User = Depends(get_current_user)):
-    service = Service(**service_data.dict())
-    service.provider_id = current_user.id
+    service_dict = service_data.dict()
+    service_dict["provider_id"] = current_user.id
+    service = Service(**service_dict)
     
     await db.services.insert_one(service.dict())
     return service
