@@ -323,6 +323,23 @@ const Integrations = ({ user }) => {
               </div>
             </div>
           )}
+          
+          {/* Always show certificate import section for demo purposes */}
+          {!linkedInConnected && (
+            <div className="mt-4 pt-4 border-t border-gray-200 bg-yellow-50 rounded-md p-4">
+              <h4 className="font-medium text-gray-900 mb-2">🎯 Demo: LinkedIn Learning Certificates</h4>
+              <p className="text-sm text-gray-600 mb-3">
+                Try our certificate import functionality with sample agricultural courses
+              </p>
+              <button
+                onClick={importLinkedInLearning}
+                disabled={importingCerts}
+                className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
+              >
+                {importingCerts ? 'Loading...' : '🌾 Try Demo Certificates'}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* GitHub Integration (Coming Soon) */}
