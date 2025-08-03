@@ -179,16 +179,19 @@ backend:
 
 frontend:
   - task: "LinkedIn Learning Integration UI"
-    implemented: false
-    working: "NA"
-    file: "N/A"
-    stuck_count: 0
-    priority: "medium"
+    implemented: true
+    working: false
+    file: "/app/frontend/src/components/Integrations.js"
+    stuck_count: 1
+    priority: "high"
     needs_retesting: false
     status_history:
       - working: "NA"
         agent: "testing"
         comment: "Frontend testing not performed as per testing agent guidelines - only backend API testing conducted."
+      - working: false
+        agent: "testing"
+        comment: "Comprehensive frontend testing completed. LinkedIn integration UI is implemented with professional design, but critical functionality issues found: 1) Import Learning Certificates button not visible in disconnected state (should show mock import option), 2) Privacy policy link navigation not working properly, 3) Certificate display functionality not working as expected. The UI shows proper LinkedIn section, Connect LinkedIn button works (redirects to LinkedIn OAuth), responsive design works well, and all major UI elements are present. However, the core certificate import functionality that was requested for testing is not accessible without LinkedIn connection, which defeats the purpose of mock certificate testing."
 
 metadata:
   created_by: "testing_agent"
