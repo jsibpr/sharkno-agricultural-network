@@ -147,12 +147,53 @@ class Certification(BaseModel):
     credential_id: Optional[str] = None
     verification_url: Optional[str] = None
 
+# Project Experience Validation Models
+class ProjectExperience(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    project_name: str
+    project_type: str  # "irrigation", "crop_management", "livestock", "technology_implementation"
+    description: str
+    location: str
+    start_date: datetime
+    end_date: Optional[datetime] = None
+    still_active: bool = False
+    skills_demonstrated: List[str] = []
+    collaborators: List[str] = []  # List of user IDs who worked on this project
+    project_leader_id: Optional[str] = None
+    project_results: Optional[str] = None
+    created_by: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class ProjectValidationRequest(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    project_experience_id: str
+    validator_id: str
+    validated_user_id: str
+    project_role: str  # What role the validated user played in the project
+    skills_validated: List[str] = []  # Specific skills observed
+    collaboration_description: str  # How they worked together
+    performance_rating: int = Field(..., ge=1, le=5)
+    would_work_again: bool
+    validation_evidence: Optional[str] = None  # Photos, documents, links
+    status: ValidationStatus = ValidationStatus.PENDING
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+
 class ValidationRequest(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    # Enhanced validation with project context
+    project_experience_id: Optional[str] = None  # Link to specific project
     skill_id: str
     validator_id: str
     validated_user_id: str
     description: str
+    
+    # New project-focused fields
+    project_name: Optional[str] = None
+    collaboration_period: Optional[str] = None
+    specific_achievements: Optional[str] = None
+    working_relationship: Optional[str] = None  # "direct_supervisor", "colleague", "client", "team_member"
+    
     status: ValidationStatus = ValidationStatus.PENDING
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
