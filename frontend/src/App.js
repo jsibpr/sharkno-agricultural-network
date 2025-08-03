@@ -5,6 +5,7 @@ import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
+import Projects from './components/Projects';
 import Services from './components/Services';
 import Validations from './components/Validations';
 import Search from './components/Search';
