@@ -515,28 +515,7 @@ class SharkNoAPITester:
         # Now test with LinkedIn connection
         return self.test_linkedin_learning_import_with_connection()
 
-    def test_linkedin_learning_mock_import(self):
-        """Test LinkedIn Learning certificate import with mock data simulation"""
-        # Since we can't easily mock the LinkedIn connection in this test environment,
-        # let's verify that the endpoint structure is correct by checking the error response
-        
-        # The endpoint should return a 404 with specific message when LinkedIn is not connected
-        success, response, status = self.make_request('POST', 'integrations/linkedin-learning/import-certificates', expected_status=404)
-        
-        if status == 404:
-            error_detail = response.get('detail', '')
-            if 'LinkedIn profile not connected' in error_detail:
-                self.log_test("LinkedIn Learning Mock Import", True, 
-                            "Endpoint correctly validates LinkedIn connection requirement")
-                return True
-            else:
-                self.log_test("LinkedIn Learning Mock Import", False, 
-                            f"Unexpected error message: {error_detail}")
-                return False
-        else:
-            self.log_test("LinkedIn Learning Mock Import", False, 
-                        f"Expected 404, got {status}")
-            return False
+
 
     def test_linkedin_learning_get_certificates(self):
         """Test getting LinkedIn Learning certificates"""
