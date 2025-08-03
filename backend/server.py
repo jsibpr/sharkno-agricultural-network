@@ -696,7 +696,130 @@ async def get_service(service_id: str):
     
     return Service(**service)
 
-# Validation endpoints
+# Project Experience endpoints
+@api_router.post("/projects", response_model=ProjectExperience)
+async def create_project_experience(project_data: ProjectExperience, current_user: User = Depends(get_current_user)):
+    """Create a new project experience"""
+    project = ProjectExperience(**project_data.dict())
+    project.created_by = current_user.id
+    
+    # Ensure the current user is included in collaborators
+    if current_user.id not in project.collaborators:
+        project.collaborators.append(current_user.id)
+    
+    await db.project_experiences.insert_one(project.dict())
+    return project
+
+@api_router.get("/projects", response_model=List[ProjectExperience])
+async def get_user_projects(current_user: User = Depends(get_current_user)):
+    """Get projects where the current user is a collaborator"""
+    projects = await db.project_experiences.find({
+        "$or": [
+            {"created_by": current_user.id},
+            {"collaborators": {"$in": [current_user.id]}}
+        ]
+    }).to_list(100)
+    return [ProjectExperience(**project) for project in projects]
+
+@api_router.get("/projects/{project_id}", response_model=ProjectExperience)
+async def get_project_experience(project_id: str, current_user: User = Depends(get_current_user)):
+    """Get a specific project experience"""
+    project = await db.project_experiences.find_one({"id": project_id})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check if user has access to this project
+    if current_user.id not in project.get("collaborators", []) and project.get("created_by") != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied to this project")
+    
+    return ProjectExperience(**project)
+
+@api_router.post("/projects/{project_id}/invite-collaborator")
+async def invite_project_collaborator(
+    project_id: str, 
+    collaborator_user_id: str, 
+    current_user: User = Depends(get_current_user)
+):
+    """Invite someone to be recognized as a collaborator on a project"""
+    project = await db.project_experiences.find_one({"id": project_id})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Only project creator can invite collaborators
+    if project.get("created_by") != current_user.id:
+        raise HTTPException(status_code=403, detail="Only project creator can invite collaborators")
+    
+    # Check if user exists
+    collaborator = await db.users.find_one({"id": collaborator_user_id})
+    if not collaborator:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Add to collaborators if not already there
+    if collaborator_user_id not in project.get("collaborators", []):
+        await db.project_experiences.update_one(
+            {"id": project_id},
+            {"$addToSet": {"collaborators": collaborator_user_id}}
+        )
+    
+    return {"message": f"Collaborator {collaborator['name']} added to project"}
+
+@api_router.post("/projects/validate", response_model=ProjectValidationRequest)
+async def create_project_validation(validation_data: ProjectValidationRequest, current_user: User = Depends(get_current_user)):
+    """Create a project-based validation"""
+    # Verify the project exists and validator has access
+    project = await db.project_experiences.find_one({"id": validation_data.project_experience_id})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if current_user.id not in project.get("collaborators", []):
+        raise HTTPException(status_code=403, detail="You must be a project collaborator to validate others")
+    
+    # Verify the validated user was also part of the project
+    if validation_data.validated_user_id not in project.get("collaborators", []):
+        raise HTTPException(status_code=400, detail="You can only validate people who worked on the same project")
+    
+    validation = ProjectValidationRequest(**validation_data.dict())
+    validation.validator_id = current_user.id
+    
+    await db.project_validations.insert_one(validation.dict())
+    return validation
+
+@api_router.get("/projects/validations/received", response_model=List[ProjectValidationRequest])
+async def get_received_project_validations(current_user: User = Depends(get_current_user)):
+    """Get project validations received by current user"""
+    validations = await db.project_validations.find({"validated_user_id": current_user.id}).to_list(100)
+    return [ProjectValidationRequest(**validation) for validation in validations]
+
+@api_router.get("/projects/validations/given", response_model=List[ProjectValidationRequest])
+async def get_given_project_validations(current_user: User = Depends(get_current_user)):
+    """Get project validations given by current user"""
+    validations = await db.project_validations.find({"validator_id": current_user.id}).to_list(100)
+    return [ProjectValidationRequest(**validation) for validation in validations]
+
+@api_router.put("/projects/validations/{validation_id}/approve")
+async def approve_project_validation(validation_id: str, current_user: User = Depends(get_current_user)):
+    """Approve a project validation"""
+    validation = await db.project_validations.find_one({"id": validation_id})
+    if not validation:
+        raise HTTPException(status_code=404, detail="Validation not found")
+    
+    if validation["validated_user_id"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Can only approve your own validations")
+    
+    await db.project_validations.update_one(
+        {"id": validation_id},
+        {"$set": {"status": ValidationStatus.APPROVED, "updated_at": datetime.utcnow()}}
+    )
+    
+    # Update user's validation count
+    await db.profiles.update_one(
+        {"user_id": current_user.id},
+        {"$inc": {"total_validations": 1}}
+    )
+    
+    return {"message": "Project validation approved"}
+
+# Enhanced Validation endpoints (keeping original for backward compatibility)
 @api_router.post("/validations", response_model=ValidationRequest)
 async def create_validation(validation_data: ValidationRequest, current_user: User = Depends(get_current_user)):
     validation = ValidationRequest(**validation_data.dict())
