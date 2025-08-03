@@ -637,6 +637,12 @@ class SharkNoAPITester:
             # Search tests
             self.test_search_profiles()
 
+            # LinkedIn Learning Integration tests
+            print("\n📚 Testing LinkedIn Learning Integration...")
+            self.test_linkedin_learning_import_certificates()
+            self.test_linkedin_learning_get_certificates()
+            self.test_linkedin_learning_certificate_skills_integration()
+
         # Print final results
         print("\n" + "=" * 70)
         print(f"📊 Test Results: {self.tests_passed}/{self.tests_run} tests passed")
