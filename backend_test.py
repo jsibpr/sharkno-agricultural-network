@@ -3,6 +3,8 @@ import sys
 import json
 from datetime import datetime, timedelta
 from typing import Dict, Any
+import pymongo
+import os
 
 class SharkNoAPITester:
     def __init__(self, base_url="https://a9c611d5-645d-4aea-9fa4-24b37432de0d.preview.emergentagent.com"):
