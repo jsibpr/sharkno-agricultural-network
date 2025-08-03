@@ -128,8 +128,8 @@ const Integrations = ({ user }) => {
         setMessage(`✅ ${data.message}`);
         setTimeout(() => setMessage(''), 5000);
         
-        // Refresh certificates
-        checkLinkedInConnection();
+        // Refresh certificates and connection status
+        await checkLinkedInConnection();
       } else {
         const error = await response.json();
         setMessage(`❌ Error: ${error.detail}`);
