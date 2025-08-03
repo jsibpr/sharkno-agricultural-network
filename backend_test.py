@@ -788,9 +788,9 @@ class SharkNoAPITester:
         project_id = self.test_data['project_id']
         collaborator_id = self.test_data['additional_users'][0]['user_id']
         
-        # Use form data for the collaborator_user_id parameter
-        success, response, status = self.make_request('POST', f'projects/{project_id}/invite-collaborator', 
-                                                    {"collaborator_user_id": collaborator_id}, 200)
+        # The collaborator_user_id is expected as a query parameter
+        success, response, status = self.make_request('POST', f'projects/{project_id}/invite-collaborator?collaborator_user_id={collaborator_id}', 
+                                                    None, 200)
         
         if success and 'message' in response:
             self.log_test("Invite Project Collaborator", True, response['message'])
