@@ -125,6 +125,8 @@ class Skill(BaseModel):
     name: str
     category: str
     verified: bool = False
+    verification_source: Optional[str] = None
+    certificate_id: Optional[str] = None
 
 class Experience(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
