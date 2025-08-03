@@ -254,15 +254,28 @@ const Validations = ({ user }) => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Validation Description
+                  Descripción de la Experiencia Compartida
                 </label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({...formData, description: e.target.value})}
                   rows="4"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                  placeholder="Describe how you've witnessed this person's skills..."
+                  placeholder="Describe específicamente el proyecto o situación donde trabajaron juntos y cómo observaste las habilidades de esta persona..."
                   required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Logros Específicos (Opcional)
+                </label>
+                <textarea
+                  value={formData.specific_achievements || ''}
+                  onChange={(e) => setFormData({...formData, specific_achievements: e.target.value})}
+                  rows="2"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="¿Qué logros específicos tuvo esta persona en el proyecto?"
                 />
               </div>
 
