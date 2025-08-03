@@ -11,6 +11,7 @@ const Navigation = ({ user, onLogout }) => {
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: '🏠' },
     { path: '/profile', label: 'Profile', icon: '👤' },
+    { path: '/projects', label: '🚜 Proyectos', icon: '🚜' },
     { path: '/services', label: 'Services', icon: '🛠️' },
     { path: '/validations', label: 'Validations', icon: '✅' },
     { path: '/search', label: 'Search', icon: '🔍' },
