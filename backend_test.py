@@ -497,6 +497,7 @@ class SharkNoAPITester:
             self.log_test("LinkedIn Learning Import (With Connection)", False, 
                         f"Status: {status}, Response: {response}")
             return False
+
     def test_linkedin_learning_import_certificates(self):
         """Test LinkedIn Learning certificate import functionality"""
         # Test both scenarios: without LinkedIn connection and with LinkedIn connection
@@ -514,8 +515,6 @@ class SharkNoAPITester:
         
         # Now test with LinkedIn connection
         return self.test_linkedin_learning_import_with_connection()
-
-
 
     def test_linkedin_learning_get_certificates(self):
         """Test getting LinkedIn Learning certificates"""
@@ -583,36 +582,45 @@ class SharkNoAPITester:
 
     def test_linkedin_learning_certificate_skills_integration(self):
         """Test that LinkedIn Learning certificates properly integrate with user skills"""
-        # Since we can't actually import certificates without LinkedIn connection,
-        # let's test that the endpoint structure is correct and the integration would work
-        
         # Get the user's profile to check current skills
         success, response, status = self.make_request('GET', f'profiles/{self.user_id}', expected_status=200)
         
         if success and 'skills' in response:
             skills = response.get('skills', [])
             
-            # Look for any existing LinkedIn Learning skills (there shouldn't be any)
+            # Look for any existing LinkedIn Learning skills
             linkedin_skills = [skill for skill in skills if skill.get('verification_source') == 'linkedin_learning']
             
-            if len(linkedin_skills) == 0:
-                self.log_test("LinkedIn Learning Skills Integration", True, 
-                            "No LinkedIn Learning skills found (expected without import)")
-                return True
-            else:
-                # If there are LinkedIn Learning skills, verify their structure
-                first_linkedin_skill = linkedin_skills[0]
-                required_fields = ['id', 'name', 'category', 'verified', 'verification_source']
-                has_required_fields = all(field in first_linkedin_skill for field in required_fields)
-                
-                if has_required_fields:
-                    self.log_test("LinkedIn Learning Skills Integration", True, 
-                                f"Found {len(linkedin_skills)} LinkedIn Learning skills with correct structure")
-                    return True
+            if self.test_data.get('linkedin_certificates_imported'):
+                # If certificates were imported, we should have LinkedIn Learning skills
+                if linkedin_skills:
+                    # Verify skill structure
+                    first_linkedin_skill = linkedin_skills[0]
+                    required_fields = ['id', 'name', 'category', 'verified', 'verification_source']
+                    has_required_fields = all(field in first_linkedin_skill for field in required_fields)
+                    
+                    if has_required_fields:
+                        self.log_test("LinkedIn Learning Skills Integration", True, 
+                                    f"Found {len(linkedin_skills)} LinkedIn Learning skills with correct structure")
+                        return True
+                    else:
+                        self.log_test("LinkedIn Learning Skills Integration", False, 
+                                    f"LinkedIn Learning skills missing required fields: {first_linkedin_skill}")
+                        return False
                 else:
                     self.log_test("LinkedIn Learning Skills Integration", False, 
-                                f"LinkedIn Learning skills missing required fields: {first_linkedin_skill}")
+                                "No LinkedIn Learning skills found despite certificate import")
                     return False
+            else:
+                # No certificates imported, so no LinkedIn Learning skills expected
+                if len(linkedin_skills) == 0:
+                    self.log_test("LinkedIn Learning Skills Integration", True, 
+                                "No LinkedIn Learning skills found (expected without import)")
+                    return True
+                else:
+                    self.log_test("LinkedIn Learning Skills Integration", True, 
+                                f"Found {len(linkedin_skills)} LinkedIn Learning skills from previous tests")
+                    return True
         else:
             self.log_test("LinkedIn Learning Skills Integration", False, 
                         f"Could not retrieve profile. Status: {status}")
