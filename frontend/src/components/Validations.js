@@ -196,15 +196,59 @@ const Validations = ({ user }) => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Skill ID
+                  Habilidad/Competencia a Validar
                 </label>
                 <input
                   type="text"
                   value={formData.skill_id}
                   onChange={(e) => setFormData({...formData, skill_id: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                  placeholder="Enter skill identifier"
+                  placeholder="ej. Manejo de Sistemas de Riego, Liderazgo de Equipos"
                   required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nombre del Proyecto (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={formData.project_name || ''}
+                  onChange={(e) => setFormData({...formData, project_name: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="ej. Implementación Sistema de Riego Finca Los Naranjos"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tipo de Colaboración
+                </label>
+                <select
+                  value={formData.working_relationship || ''}
+                  onChange={(e) => setFormData({...formData, working_relationship: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="">Seleccionar tipo de colaboración</option>
+                  <option value="direct_supervisor">Fui su supervisor directo</option>
+                  <option value="colleague">Trabajamos como colegas</option>
+                  <option value="client">Fui su cliente</option>
+                  <option value="team_member">Trabajamos en el mismo equipo</option>
+                  <option value="contractor">Trabajó como contratista para mí</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Período de Colaboración (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={formData.collaboration_period || ''}
+                  onChange={(e) => setFormData({...formData, collaboration_period: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="ej. Enero - Marzo 2024, 6 meses"
                 />
               </div>
 
