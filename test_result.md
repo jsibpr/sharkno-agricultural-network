@@ -201,11 +201,10 @@ metadata:
 
 test_plan:
   current_focus:
-    - "LinkedIn Learning Certificate Import API"
-    - "LinkedIn Learning Certificate Retrieval API"
-    - "LinkedIn Learning Skills Integration"
+    - "LinkedIn Learning Integration UI"
   stuck_tasks:
     - "Service Creation System"
+    - "LinkedIn Learning Integration UI"
   test_all: false
   test_priority: "high_first"
 
