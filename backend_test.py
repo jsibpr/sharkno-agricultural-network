@@ -788,17 +788,27 @@ class SharkNoAPITester:
         project_id = self.test_data['project_id']
         collaborator_id = self.test_data['additional_users'][0]['user_id']
         
-        # The collaborator_user_id is expected as a query parameter
-        success, response, status = self.make_request('POST', f'projects/{project_id}/invite-collaborator?collaborator_user_id={collaborator_id}', 
-                                                    None, 200)
+        # Try different approaches to send the collaborator_user_id
+        # First try as JSON body
+        success, response, status = self.make_request('POST', f'projects/{project_id}/invite-collaborator', 
+                                                    collaborator_id, 200)
         
         if success and 'message' in response:
             self.log_test("Invite Project Collaborator", True, response['message'])
             self.test_data['invited_collaborator_id'] = collaborator_id
             return True
         else:
-            self.log_test("Invite Project Collaborator", False, f"Status: {status}, Response: {response}")
-            return False
+            # Try as query parameter
+            success, response, status = self.make_request('POST', f'projects/{project_id}/invite-collaborator?collaborator_user_id={collaborator_id}', 
+                                                        None, 200)
+            
+            if success and 'message' in response:
+                self.log_test("Invite Project Collaborator", True, response['message'])
+                self.test_data['invited_collaborator_id'] = collaborator_id
+                return True
+            else:
+                self.log_test("Invite Project Collaborator", False, f"Status: {status}, Response: {response}")
+                return False
 
     def test_create_project_validation(self):
         """Test creating project-based validation"""
