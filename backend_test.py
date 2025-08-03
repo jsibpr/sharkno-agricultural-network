@@ -626,6 +626,341 @@ class SharkNoAPITester:
                         f"Could not retrieve profile. Status: {status}")
             return False
 
+    # ========== PROJECT-BASED VALIDATION SYSTEM TESTS ==========
+    
+    def setup_additional_test_users(self):
+        """Create additional test users for project collaboration testing"""
+        additional_users = [
+            {
+                "role": "agronomist",
+                "email": f"agronomist_{datetime.now().strftime('%H%M%S')}@test.com",
+                "name": "Dr. Sarah Agronomist",
+                "password": "TestPass123!"
+            },
+            {
+                "role": "equipment_dealer", 
+                "email": f"dealer_{datetime.now().strftime('%H%M%S')}@test.com",
+                "name": "Mike Equipment",
+                "password": "TestPass123!"
+            }
+        ]
+        
+        created_users = []
+        for user_data in additional_users:
+            success, response, status = self.make_request('POST', 'auth/register', user_data, 200)
+            
+            if success and 'access_token' in response:
+                user_info = {
+                    'user_id': response['user']['id'],
+                    'name': response['user']['name'],
+                    'email': response['user']['email'],
+                    'role': response['user']['role'],
+                    'token': response['access_token'],
+                    'password': user_data['password']
+                }
+                created_users.append(user_info)
+                self.log_test(f"Setup Additional User: {user_data['role']}", True, f"User ID: {response['user']['id']}")
+            else:
+                self.log_test(f"Setup Additional User: {user_data['role']}", False, f"Status: {status}")
+        
+        self.test_data['additional_users'] = created_users
+        return len(created_users) >= 2
+
+    def test_create_project_experience(self):
+        """Test creating project experiences"""
+        project_data = {
+            "project_name": "Irrigation System Installation",
+            "project_type": "irrigation",
+            "description": "Installation of modern drip irrigation system across 200 acres of farmland to improve water efficiency and crop yields.",
+            "location": "Cedar Falls, Iowa",
+            "start_date": "2024-01-15T00:00:00Z",
+            "end_date": "2024-03-30T00:00:00Z",
+            "still_active": False,
+            "skills_demonstrated": ["Irrigation Design", "Water Management", "Project Management", "Agricultural Engineering"],
+            "collaborators": [],  # Will be populated by the API
+            "project_results": "Successfully reduced water usage by 30% while increasing crop yield by 15%"
+        }
+
+        success, response, status = self.make_request('POST', 'projects', project_data, 200)
+        
+        if success and 'id' in response:
+            self.test_data['project_id'] = response['id']
+            self.log_test("Create Project Experience", True, f"Project ID: {response['id']}")
+            
+            # Verify the current user was added to collaborators
+            if self.user_id in response.get('collaborators', []):
+                self.log_test("Project Creator Auto-Added to Collaborators", True, "Creator added to collaborators list")
+            else:
+                self.log_test("Project Creator Auto-Added to Collaborators", False, "Creator not in collaborators list")
+            
+            return True
+        else:
+            self.log_test("Create Project Experience", False, f"Status: {status}, Response: {response}")
+            return False
+
+    def test_get_user_projects(self):
+        """Test getting user's projects"""
+        success, response, status = self.make_request('GET', 'projects', expected_status=200)
+        
+        if success and isinstance(response, list):
+            # Should have at least the project we created
+            if len(response) >= 1:
+                project = response[0]
+                required_fields = ['id', 'project_name', 'project_type', 'description', 'collaborators']
+                has_required_fields = all(field in project for field in required_fields)
+                
+                if has_required_fields:
+                    self.log_test("Get User Projects", True, f"Found {len(response)} projects with correct structure")
+                    return True
+                else:
+                    self.log_test("Get User Projects", False, f"Project missing required fields: {project}")
+                    return False
+            else:
+                self.log_test("Get User Projects", False, "No projects found")
+                return False
+        else:
+            self.log_test("Get User Projects", False, f"Status: {status}")
+            return False
+
+    def test_get_specific_project(self):
+        """Test getting a specific project"""
+        if not self.test_data.get('project_id'):
+            self.log_test("Get Specific Project", False, "No project ID available")
+            return False
+
+        project_id = self.test_data['project_id']
+        success, response, status = self.make_request('GET', f'projects/{project_id}', expected_status=200)
+        
+        if success and 'project_name' in response:
+            self.log_test("Get Specific Project", True, f"Project: {response['project_name']}")
+            return True
+        else:
+            self.log_test("Get Specific Project", False, f"Status: {status}")
+            return False
+
+    def test_search_collaborators(self):
+        """Test searching for potential collaborators"""
+        # Test search without query (should return empty)
+        success, response, status = self.make_request('GET', 'search/collaborators', expected_status=200)
+        
+        if success and isinstance(response, list):
+            self.log_test("Search Collaborators (No Query)", True, f"Found {len(response)} users")
+        else:
+            self.log_test("Search Collaborators (No Query)", False, f"Status: {status}")
+            return False
+
+        # Test search with query
+        success, response, status = self.make_request('GET', 'search/collaborators?q=agronomist', expected_status=200)
+        
+        if success and isinstance(response, list):
+            self.log_test("Search Collaborators (With Query)", True, f"Found {len(response)} users matching 'agronomist'")
+            
+            # If we have results, verify structure
+            if len(response) > 0:
+                user = response[0]
+                required_fields = ['user_id', 'name', 'email', 'role']
+                has_required_fields = all(field in user for field in required_fields)
+                
+                if has_required_fields:
+                    self.log_test("Collaborator Search Result Structure", True, "Search results have correct structure")
+                    return True
+                else:
+                    self.log_test("Collaborator Search Result Structure", False, f"Missing fields in result: {user}")
+                    return False
+            else:
+                self.log_test("Search Collaborators (With Query)", True, "No results found (expected if no matching users)")
+                return True
+        else:
+            self.log_test("Search Collaborators (With Query)", False, f"Status: {status}")
+            return False
+
+    def test_invite_project_collaborator(self):
+        """Test inviting collaborators to a project"""
+        if not self.test_data.get('project_id'):
+            self.log_test("Invite Project Collaborator", False, "No project ID available")
+            return False
+
+        if not self.test_data.get('additional_users') or len(self.test_data['additional_users']) == 0:
+            self.log_test("Invite Project Collaborator", False, "No additional users available")
+            return False
+
+        project_id = self.test_data['project_id']
+        collaborator_id = self.test_data['additional_users'][0]['user_id']
+        
+        # Use form data for the collaborator_user_id parameter
+        success, response, status = self.make_request('POST', f'projects/{project_id}/invite-collaborator', 
+                                                    {"collaborator_user_id": collaborator_id}, 200)
+        
+        if success and 'message' in response:
+            self.log_test("Invite Project Collaborator", True, response['message'])
+            self.test_data['invited_collaborator_id'] = collaborator_id
+            return True
+        else:
+            self.log_test("Invite Project Collaborator", False, f"Status: {status}, Response: {response}")
+            return False
+
+    def test_create_project_validation(self):
+        """Test creating project-based validation"""
+        if not self.test_data.get('project_id'):
+            self.log_test("Create Project Validation", False, "No project ID available")
+            return False
+
+        if not self.test_data.get('invited_collaborator_id'):
+            self.log_test("Create Project Validation", False, "No invited collaborator available")
+            return False
+
+        validation_data = {
+            "project_experience_id": self.test_data['project_id'],
+            "validated_user_id": self.test_data['invited_collaborator_id'],
+            "project_role": "Irrigation Specialist",
+            "skills_validated": ["Irrigation Design", "Water Management", "Technical Problem Solving"],
+            "collaboration_description": "Worked closely together on designing and implementing the drip irrigation system. Demonstrated excellent technical knowledge and problem-solving skills.",
+            "performance_rating": 5,
+            "would_work_again": True,
+            "validation_evidence": "Photos of completed irrigation installation and water efficiency reports"
+        }
+
+        success, response, status = self.make_request('POST', 'projects/validate', validation_data, 200)
+        
+        if success and 'id' in response:
+            self.test_data['project_validation_id'] = response['id']
+            self.log_test("Create Project Validation", True, f"Validation ID: {response['id']}")
+            return True
+        else:
+            self.log_test("Create Project Validation", False, f"Status: {status}, Response: {response}")
+            return False
+
+    def test_get_received_project_validations(self):
+        """Test getting project validations received by user"""
+        # Switch to the collaborator's token to check their received validations
+        if not self.test_data.get('additional_users') or len(self.test_data['additional_users']) == 0:
+            self.log_test("Get Received Project Validations", False, "No additional users available")
+            return False
+
+        # Store original token
+        original_token = self.token
+        
+        # Switch to collaborator's token
+        collaborator = self.test_data['additional_users'][0]
+        self.token = collaborator['token']
+        
+        success, response, status = self.make_request('GET', 'projects/validations/received', expected_status=200)
+        
+        # Restore original token
+        self.token = original_token
+        
+        if success and isinstance(response, list):
+            self.log_test("Get Received Project Validations", True, f"Found {len(response)} received validations")
+            
+            # If we have validations, verify structure
+            if len(response) > 0:
+                validation = response[0]
+                required_fields = ['id', 'project_experience_id', 'validator_id', 'validated_user_id', 'project_role', 'performance_rating']
+                has_required_fields = all(field in validation for field in required_fields)
+                
+                if has_required_fields:
+                    self.log_test("Project Validation Structure", True, "Validation has correct structure")
+                    return True
+                else:
+                    self.log_test("Project Validation Structure", False, f"Missing fields: {validation}")
+                    return False
+            else:
+                self.log_test("Get Received Project Validations", True, "No validations found (expected if none created)")
+                return True
+        else:
+            self.log_test("Get Received Project Validations", False, f"Status: {status}")
+            return False
+
+    def test_get_given_project_validations(self):
+        """Test getting project validations given by user"""
+        success, response, status = self.make_request('GET', 'projects/validations/given', expected_status=200)
+        
+        if success and isinstance(response, list):
+            self.log_test("Get Given Project Validations", True, f"Found {len(response)} given validations")
+            return True
+        else:
+            self.log_test("Get Given Project Validations", False, f"Status: {status}")
+            return False
+
+    def test_approve_project_validation(self):
+        """Test approving a project validation"""
+        if not self.test_data.get('project_validation_id'):
+            self.log_test("Approve Project Validation", False, "No project validation ID available")
+            return False
+
+        if not self.test_data.get('additional_users') or len(self.test_data['additional_users']) == 0:
+            self.log_test("Approve Project Validation", False, "No additional users available")
+            return False
+
+        # Store original token
+        original_token = self.token
+        
+        # Switch to collaborator's token (they need to approve their own validation)
+        collaborator = self.test_data['additional_users'][0]
+        self.token = collaborator['token']
+        
+        validation_id = self.test_data['project_validation_id']
+        success, response, status = self.make_request('PUT', f'projects/validations/{validation_id}/approve', expected_status=200)
+        
+        # Restore original token
+        self.token = original_token
+        
+        if success and 'message' in response:
+            self.log_test("Approve Project Validation", True, response['message'])
+            return True
+        else:
+            self.log_test("Approve Project Validation", False, f"Status: {status}, Response: {response}")
+            return False
+
+    def test_get_given_regular_validations(self):
+        """Test getting regular validations given by user (enhanced endpoint)"""
+        success, response, status = self.make_request('GET', 'validations/given', expected_status=200)
+        
+        if success and isinstance(response, list):
+            self.log_test("Get Given Regular Validations", True, f"Found {len(response)} given regular validations")
+            return True
+        else:
+            self.log_test("Get Given Regular Validations", False, f"Status: {status}")
+            return False
+
+    def run_project_validation_tests(self):
+        """Run complete project-based validation system tests"""
+        print("\n🏗️  Testing Project-Based Validation System...")
+        print("-" * 50)
+        
+        # Setup additional users for collaboration testing
+        if not self.setup_additional_test_users():
+            print("❌ Failed to setup additional test users - skipping project tests")
+            return False
+        
+        # Test complete project workflow
+        success = True
+        
+        # Project Experience Tests
+        if self.test_create_project_experience():
+            self.test_get_user_projects()
+            self.test_get_specific_project()
+        else:
+            success = False
+        
+        # Collaborator Management Tests
+        self.test_search_collaborators()
+        if not self.test_invite_project_collaborator():
+            success = False
+        
+        # Project Validation Tests
+        if self.test_create_project_validation():
+            self.test_get_received_project_validations()
+            self.test_get_given_project_validations()
+            self.test_approve_project_validation()
+        else:
+            success = False
+        
+        # Enhanced Regular Validation Tests
+        self.test_get_given_regular_validations()
+        
+        return success
+
     def run_all_tests(self):
         """Run all API tests"""
         print("🚀 Starting SharkNo Agricultural Professional Network API Tests")
