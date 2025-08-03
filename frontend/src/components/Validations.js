@@ -254,12 +254,21 @@ const Validations = ({ user }) => {
 
       {/* Explanation */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
-        <h2 className="text-lg font-semibold text-blue-900 mb-2">How Skill Validation Works</h2>
+        <h2 className="text-lg font-semibold text-blue-900 mb-2">🎯 Cómo Funcionan las Validaciones en SHARKNO</h2>
         <div className="text-blue-700 space-y-2">
-          <p>• <strong>Validate Others:</strong> Endorse the skills of agricultural professionals you've worked with</p>
-          <p>• <strong>Get Validated:</strong> Receive endorsements from colleagues and clients</p>
-          <p>• <strong>Build Trust:</strong> Third-party validations increase credibility in the agricultural community</p>
-          <p>• <strong>Approve Validations:</strong> You can approve or reject validations received for your skills</p>
+          <p>• <strong>Nuevo: Validaciones por Proyectos:</strong> Ve a la sección "🚜 Proyectos" para validar colaboradores basándote en experiencias reales de proyectos</p>
+          <p>• <strong>Valida Otros:</strong> Respalda las habilidades de profesionales agrícolas con quienes has trabajado</p>
+          <p>• <strong>Recibe Validaciones:</strong> Obtén respaldos de colegas y clientes</p>
+          <p>• <strong>Construye Confianza:</strong> Las validaciones de terceros aumentan la credibilidad en la comunidad agrícola</p>
+          <p>• <strong>Aprueba Validaciones:</strong> Puedes aprobar o rechazar las validaciones que recibas</p>
+        </div>
+        
+        <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
+          <h3 className="font-medium text-green-900 mb-2">💡 Recomendación:</h3>
+          <p className="text-green-700 text-sm">
+            Para validaciones más efectivas, utiliza la nueva sección de <strong>"🚜 Proyectos"</strong> donde puedes 
+            documentar proyectos específicos y validar a colaboradores basándote en experiencias reales de trabajo conjunto.
+          </p>
         </div>
       </div>
 
