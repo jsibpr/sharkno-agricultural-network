@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Test the LinkedIn Learning certificate import functionality in the SharkNo Agricultural Network application"
+user_problem_statement: "Test the complete SHARKNO validation system from the frontend UI to verify all claimed functionality actually works"
 
 backend:
   - task: "LinkedIn Learning Certificate Import API"
