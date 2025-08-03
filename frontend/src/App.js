@@ -116,6 +116,16 @@ function App() {
             } 
           />
           <Route 
+            path="/projects" 
+            element={
+              user ? (
+                <Projects user={user} />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            } 
+          />
+          <Route 
             path="/services" 
             element={
               user ? (
