@@ -155,6 +155,10 @@ function App() {
             } 
           />
           <Route 
+            path="/privacy" 
+            element={<Privacy />} 
+          />
+          <Route 
             path="/" 
             element={
               user ? (
