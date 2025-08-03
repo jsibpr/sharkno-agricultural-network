@@ -387,8 +387,8 @@ async def linkedin_callback(request: Request, code: str, state: str):
         )
         
         # Redirect back to frontend with success
-        frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3001')
-        return RedirectResponse(url=f"{frontend_url}/profile?linkedin=connected")
+        frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3002')
+        return RedirectResponse(url=f"{frontend_url}/integrations?linkedin=connected")
         
     except Exception as e:
         logger.error(f"LinkedIn callback error: {e}")
