@@ -497,25 +497,23 @@ class SharkNoAPITester:
             self.log_test("LinkedIn Learning Import (With Connection)", False, 
                         f"Status: {status}, Response: {response}")
             return False
+    def test_linkedin_learning_import_certificates(self):
         """Test LinkedIn Learning certificate import functionality"""
-        # First, we need to create a mock LinkedIn profile connection
-        # Since the endpoint requires a LinkedIn profile to be connected,
-        # we'll need to simulate this by directly inserting a LinkedIn profile
+        # Test both scenarios: without LinkedIn connection and with LinkedIn connection
         
-        # For now, let's test the endpoint behavior when LinkedIn is not connected
+        # First test without LinkedIn connection (should fail)
         success, response, status = self.make_request('POST', 'integrations/linkedin-learning/import-certificates', expected_status=404)
         
         if status == 404 and 'LinkedIn profile not connected' in str(response):
-            self.log_test("LinkedIn Learning Import Certificates (No LinkedIn)", True, 
+            self.log_test("LinkedIn Learning Import (No LinkedIn)", True, 
                         "Correctly returns 404 when LinkedIn not connected")
-            
-            # Now let's test what happens if we could connect LinkedIn
-            # We'll simulate this by testing the certificate retrieval endpoint
-            return self.test_linkedin_learning_mock_import()
         else:
-            self.log_test("LinkedIn Learning Import Certificates", False, 
+            self.log_test("LinkedIn Learning Import (No LinkedIn)", False, 
                         f"Unexpected response. Status: {status}, Response: {response}")
             return False
+        
+        # Now test with LinkedIn connection
+        return self.test_linkedin_learning_import_with_connection()
 
     def test_linkedin_learning_mock_import(self):
         """Test LinkedIn Learning certificate import with mock data simulation"""
