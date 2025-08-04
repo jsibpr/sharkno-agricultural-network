@@ -1384,7 +1384,132 @@ async def search_entities(
                 })
     
     # Limit results and sort by relevance
-    return results[:limit]
+# Initialize verification databases on startup
+@api_router.on_event("startup")
+async def initialize_verification_databases():
+    """Initialize databases with verified entities"""
+    
+    # Verified companies database
+    verified_companies = [
+        {"name": "John Deere", "website": "https://www.deere.com", "industry": "Agricultural Equipment", "verified": True},
+        {"name": "Syngenta", "website": "https://www.syngenta.com", "industry": "Seeds & Crop Protection", "verified": True},
+        {"name": "Yara International", "website": "https://www.yara.com", "industry": "Fertilizers", "verified": True},
+        {"name": "Netafim", "website": "https://www.netafim.com", "industry": "Irrigation Systems", "verified": True},
+        {"name": "Bayer CropScience", "website": "https://www.bayer.com", "industry": "Crop Protection", "verified": True},
+        {"name": "BASF Agricultural Solutions", "website": "https://agriculture.basf.com", "industry": "Agricultural Solutions", "verified": True}
+    ]
+    
+    for company in verified_companies:
+        existing = await db.verified_companies.find_one({"name": company["name"]})
+        if not existing:
+            await db.verified_companies.insert_one(company)
+    
+    # Verified products database
+    verified_products = [
+        {"name": "John Deere 6R Series", "brand": "John Deere", "category": "Tractor", "verified": True},
+        {"name": "Netafim NetaJet", "brand": "Netafim", "category": "Drip Irrigation", "verified": True},
+        {"name": "DJI Agras T40", "brand": "DJI", "category": "Agricultural Drone", "verified": True},
+        {"name": "YaraBela NITROMAG", "brand": "Yara", "category": "Fertilizer", "verified": True},
+        {"name": "FieldView", "brand": "Bayer", "category": "Farm Management Software", "verified": True}
+    ]
+    
+    for product in verified_products:
+        existing = await db.verified_products.find_one({"name": product["name"], "brand": product["brand"]})
+        if not existing:
+            await db.verified_products.insert_one(product)
+
+# Trust score calculation
+@api_router.get("/trust-score/{user_id}")
+async def calculate_user_trust_score(user_id: str):
+    """Calculate comprehensive trust score for a user"""
+    
+    # Get user's validations
+    validations = await db.comprehensive_validations_verified.find({"validator_id": user_id}).to_list(100)
+    received_validations = await db.comprehensive_validations_verified.find({
+        "tagged_entities": {"$elemMatch": {"entity_id": user_id}}
+    }).to_list(100)
+    
+    trust_factors = {
+        "verification_rate": 0,
+        "entity_diversity": 0,
+        "mutual_validations": 0,
+        "domain_verification": 0,
+        "linkedin_connections": 0,
+        "response_rate": 0
+    }
+    
+    if validations:
+        # Calculate verification rate
+        verified_validations = len([v for v in validations if v.get("verification_evidence")])
+        trust_factors["verification_rate"] = verified_validations / len(validations)
+        
+        # Calculate entity diversity (variety of entities tagged)
+        all_entities = []
+        for validation in validations:
+            all_entities.extend(validation.get("tagged_entities", []))
+        
+        entity_types = set([entity["entity_type"] for entity in all_entities])
+        trust_factors["entity_diversity"] = len(entity_types) / 5  # Max 5 types
+    
+    # Calculate mutual validations
+    mutual_count = 0
+    for validation in received_validations:
+        # Check if user also validated the validator
+        reciprocal = await db.comprehensive_validations_verified.find_one({
+            "validator_id": user_id,
+            "tagged_entities": {"$elemMatch": {"entity_id": validation["validator_id"]}}
+        })
+        if reciprocal:
+            mutual_count += 1
+    
+    if received_validations:
+        trust_factors["mutual_validations"] = mutual_count / len(received_validations)
+    
+    # Calculate overall trust score (weighted average)
+    weights = {
+        "verification_rate": 0.3,
+        "entity_diversity": 0.2,
+        "mutual_validations": 0.2,
+        "domain_verification": 0.15,
+        "linkedin_connections": 0.1,
+        "response_rate": 0.05
+    }
+    
+    trust_score = sum([trust_factors[factor] * weight for factor, weight in weights.items()])
+    
+    return {
+        "user_id": user_id,
+        "trust_score": round(trust_score, 3),
+        "trust_factors": trust_factors,
+        "verification_level": get_trust_level(trust_score),
+        "recommendations": get_trust_recommendations(trust_factors)
+    }
+
+def get_trust_level(score: float) -> str:
+    """Get trust level based on score"""
+    if score >= 0.8:
+        return "🌟 Highly Trusted"
+    elif score >= 0.6:
+        return "✅ Trusted"
+    elif score >= 0.4:
+        return "⚠️ Moderately Trusted"
+    else:
+        return "🔍 Needs Verification"
+
+def get_trust_recommendations(factors: dict) -> list:
+    """Get recommendations to improve trust score"""
+    recommendations = []
+    
+    if factors["verification_rate"] < 0.5:
+        recommendations.append("Verify more of your tagged entities through email/LinkedIn")
+    
+    if factors["entity_diversity"] < 0.4:
+        recommendations.append("Tag more diverse entities (companies, products, locations)")
+    
+    if factors["mutual_validations"] < 0.3:
+        recommendations.append("Build reciprocal professional relationships")
+    
+    return recommendations
 
 @api_router.get("/validations/comprehensive/received", response_model=List[ComprehensiveValidationRequest])
 async def get_received_comprehensive_validations(current_user: User = Depends(get_current_user)):
