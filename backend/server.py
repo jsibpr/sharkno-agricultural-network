@@ -858,6 +858,146 @@ async def approve_project_validation(validation_id: str, current_user: User = De
     
     return {"message": "Project validation approved"}
 
+# Enhanced Validation endpoints with external tagging
+@api_router.post("/validations/enhanced", response_model=EnhancedValidationRequest)
+async def create_enhanced_validation(validation_data: EnhancedValidationRequest, current_user: User = Depends(get_current_user)):
+    """Create enhanced validation with internal or external user tagging"""
+    validation = EnhancedValidationRequest(**validation_data.dict())
+    validation.validator_id = current_user.id
+    
+    # Validate that either internal user or external profile is provided
+    if not validation.validated_user_id and not validation.external_profile:
+        raise HTTPException(status_code=400, detail="Must provide either validated_user_id or external_profile")
+    
+    # If internal user, verify they exist
+    if validation.validated_user_id:
+        user_exists = await db.users.find_one({"id": validation.validated_user_id})
+        if not user_exists:
+            raise HTTPException(status_code=404, detail="Validated user not found")
+    
+    # If external profile, handle invitation logic
+    if validation.external_profile:
+        await handle_external_user_invitation(validation.external_profile, validation.id)
+        validation.external_invited = True
+    
+    await db.enhanced_validations.insert_one(validation.dict())
+    return validation
+
+async def handle_external_user_invitation(external_profile: ExternalProfile, validation_id: str):
+    """Handle invitation logic for external users"""
+    try:
+        if external_profile.platform == "linkedin" and external_profile.profile_url:
+            # Create LinkedIn invitation (mock for now)
+            print(f"📧 LinkedIn invitation would be sent to: {external_profile.profile_url}")
+            
+        elif external_profile.platform == "email" and external_profile.email:
+            # Create email invitation (mock for now)
+            print(f"📧 Email invitation would be sent to: {external_profile.email}")
+            
+        # In production, integrate with:
+        # - LinkedIn API for invitations
+        # - Email service (SendGrid, etc.)
+        # - SMS service for notifications
+        
+        # Store pending invitation
+        invitation = {
+            "validation_id": validation_id,
+            "external_profile": external_profile.dict(),
+            "status": "sent",
+            "created_at": datetime.utcnow()
+        }
+        await db.external_invitations.insert_one(invitation)
+        
+    except Exception as e:
+        print(f"❌ Error sending invitation: {e}")
+
+@api_router.get("/search/external-profiles")
+async def search_external_profiles(
+    q: Optional[str] = None,
+    platform: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    limit: int = 10
+):
+    """Search for external profiles (LinkedIn, etc.)"""
+    if not q:
+        return []
+    
+    # Mock LinkedIn search results for demo
+    if platform == "linkedin" or not platform:
+        mock_linkedin_results = [
+            {
+                "platform": "linkedin",
+                "platform_id": "maria-agronoma-123",
+                "profile_url": f"https://linkedin.com/in/maria-agronoma-123",
+                "name": "Dr. María Fernández",
+                "title": "Agrónoma Especialista en Riego",
+                "company": "AgroConsult España",
+                "email": None
+            },
+            {
+                "platform": "linkedin", 
+                "platform_id": "carlos-ingeniero-456",
+                "profile_url": f"https://linkedin.com/in/carlos-ingeniero-456",
+                "name": "Carlos Rodríguez",
+                "title": "Ingeniero Agrícola",
+                "company": "TecnoAgro Solutions",
+                "email": None
+            }
+        ]
+        
+        # Filter by search query
+        filtered_results = []
+        for result in mock_linkedin_results:
+            if q.lower() in result["name"].lower() or q.lower() in result["title"].lower():
+                filtered_results.append(result)
+        
+        return filtered_results[:limit]
+    
+    return []
+
+@api_router.get("/validations/enhanced/received", response_model=List[EnhancedValidationRequest])
+async def get_received_enhanced_validations(current_user: User = Depends(get_current_user)):
+    """Get enhanced validations received by current user"""
+    validations = await db.enhanced_validations.find({"validated_user_id": current_user.id}).to_list(100)
+    return [EnhancedValidationRequest(**validation) for validation in validations]
+
+@api_router.get("/validations/enhanced/given", response_model=List[EnhancedValidationRequest])
+async def get_given_enhanced_validations(current_user: User = Depends(get_current_user)):
+    """Get enhanced validations given by current user"""
+    validations = await db.enhanced_validations.find({"validator_id": current_user.id}).to_list(100)
+    return [EnhancedValidationRequest(**validation) for validation in validations]
+
+@api_router.get("/external-invitations/pending")
+async def get_pending_external_invitations(current_user: User = Depends(get_current_user)):
+    """Get pending external invitations sent by current user"""
+    invitations = await db.external_invitations.find({
+        "external_profile.email": {"$exists": True},
+        "status": "sent"
+    }).to_list(100)
+    
+    return invitations
+
+@api_router.post("/external-invitations/{invitation_id}/accept")
+async def accept_external_invitation(invitation_id: str, current_user: User = Depends(get_current_user)):
+    """Accept an external invitation and link to SHARKNO account"""
+    invitation = await db.external_invitations.find_one({"_id": invitation_id})
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    
+    # Link external profile to SHARKNO user
+    await db.external_invitations.update_one(
+        {"_id": invitation_id},
+        {"$set": {"status": "accepted", "sharkno_user_id": current_user.id}}
+    )
+    
+    # Update the validation to point to the SHARKNO user
+    await db.enhanced_validations.update_one(
+        {"id": invitation["validation_id"]},
+        {"$set": {"validated_user_id": current_user.id, "external_profile.sharkno_user_id": current_user.id}}
+    )
+    
+    return {"message": "Invitation accepted and profile linked"}
+
 # Enhanced Validation endpoints (keeping original for backward compatibility)
 # Enhanced Validation endpoints (keeping original for backward compatibility)
 @api_router.post("/validations", response_model=ValidationRequest)
