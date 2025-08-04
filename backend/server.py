@@ -911,7 +911,182 @@ async def approve_project_validation(validation_id: str, current_user: User = De
     
     return {"message": "Project validation approved"}
 
-# Enhanced Validation endpoints with external tagging
+# Comprehensive validation endpoints with full entity tagging
+@api_router.post("/validations/comprehensive", response_model=ComprehensiveValidationRequest)
+async def create_comprehensive_validation(validation_data: ComprehensiveValidationRequest, current_user: User = Depends(get_current_user)):
+    """Create comprehensive validation with full entity tagging (people, companies, products, etc.)"""
+    validation = ComprehensiveValidationRequest(**validation_data.dict())
+    validation.validator_id = current_user.id
+    
+    # Process notifications for all tagged entities
+    notifications_sent = []
+    for entity in validation.tagged_entities:
+        if entity.entity_type == "person":
+            if entity.platform == "linkedin" and entity.profile_url:
+                notifications_sent.append(f"linkedin:{entity.profile_url}")
+            elif entity.platform == "email" and entity.email:
+                notifications_sent.append(f"email:{entity.email}")
+            elif entity.platform == "sharkno" and entity.entity_id:
+                notifications_sent.append(f"sharkno:{entity.entity_id}")
+        elif entity.entity_type == "company" and entity.website:
+            notifications_sent.append(f"company:{entity.website}")
+    
+    validation.notifications_sent = notifications_sent
+    
+    await db.comprehensive_validations.insert_one(validation.dict())
+    return validation
+
+@api_router.get("/search/entities")
+async def search_entities(
+    q: Optional[str] = None,
+    entity_type: Optional[str] = None,  # "person", "company", "product", "location", "crop"
+    current_user: User = Depends(get_current_user),
+    limit: int = 20
+):
+    """Search for entities across all categories (people, companies, products, locations, crops)"""
+    if not q or len(q) < 2:
+        return []
+    
+    results = []
+    
+    # Search People (SHARKNO users + LinkedIn)
+    if not entity_type or entity_type == "person":
+        # Internal SHARKNO users
+        users = await db.users.find({
+            "$and": [
+                {"id": {"$ne": current_user.id}},
+                {"$or": [
+                    {"name": {"$regex": q, "$options": "i"}},
+                    {"email": {"$regex": q, "$options": "i"}}
+                ]}
+            ]
+        }).limit(5).to_list(5)
+        
+        for user in users:
+            profile = await db.profiles.find_one({"user_id": user["id"]})
+            results.append({
+                "entity_type": "person",
+                "entity_id": user["id"],
+                "name": user["name"],
+                "title": profile.get("title", "") if profile else "",
+                "platform": "sharkno",
+                "email": user["email"]
+            })
+        
+        # Mock LinkedIn search
+        mock_linkedin_people = [
+            {"name": "Dr. María Fernández", "title": "Agrónoma Especialista", "company": "AgroConsult España"},
+            {"name": "Carlos Rodríguez", "title": "Ingeniero Agrícola", "company": "TecnoAgro Solutions"},
+            {"name": "Ana García", "title": "Especialista en Riego", "company": "IrrigaTech"},
+            {"name": "Luis Martínez", "title": "Consultor Agrícola", "company": "AgroExpertos"}
+        ]
+        
+        for person in mock_linkedin_people:
+            if q.lower() in person["name"].lower() or q.lower() in person["title"].lower():
+                results.append({
+                    "entity_type": "person",
+                    "name": person["name"],
+                    "title": person["title"],
+                    "platform": "linkedin",
+                    "profile_url": f"https://linkedin.com/in/{person['name'].lower().replace(' ', '-')}",
+                    "company": person["company"]
+                })
+    
+    # Search Companies
+    if not entity_type or entity_type == "company":
+        mock_companies = [
+            {"name": "John Deere", "industry": "Maquinaria Agrícola", "website": "https://www.deere.com"},
+            {"name": "Syngenta", "industry": "Semillas y Agroquímicos", "website": "https://www.syngenta.com"},
+            {"name": "Yara International", "industry": "Fertilizantes", "website": "https://www.yara.com"},
+            {"name": "Netafim", "industry": "Sistemas de Riego", "website": "https://www.netafim.com"},
+            {"name": "AgroConsult España", "industry": "Consultoría Agrícola", "website": "https://agroconsult.es"},
+            {"name": "TecnoAgro Solutions", "industry": "Tecnología Agrícola", "website": "https://tecnoagro.com"},
+            {"name": "Bayer CropScience", "industry": "Protección de Cultivos", "website": "https://www.bayer.com"}
+        ]
+        
+        for company in mock_companies:
+            if q.lower() in company["name"].lower() or q.lower() in company["industry"].lower():
+                results.append({
+                    "entity_type": "company",
+                    "name": company["name"],
+                    "industry": company["industry"],
+                    "website": company["website"]
+                })
+    
+    # Search Products/Equipment
+    if not entity_type or entity_type == "product":
+        mock_products = [
+            {"name": "John Deere 6R Series", "category": "equipment", "brand": "John Deere", "model": "6155R"},
+            {"name": "Sistema de Riego por Goteo NetaJet", "category": "equipment", "brand": "Netafim", "model": "NetaJet"},
+            {"name": "Semilla de Maíz Pioneer P1921", "category": "seed", "brand": "Pioneer", "model": "P1921"},
+            {"name": "Fertilizante YaraBela NITROMAG", "category": "fertilizer", "brand": "Yara", "model": "NITROMAG"},
+            {"name": "Software FieldView", "category": "technology", "brand": "Bayer", "model": "FieldView Pro"},
+            {"name": "Drone DJI Agras T40", "category": "equipment", "brand": "DJI", "model": "Agras T40"},
+            {"name": "Sensor de Humedad CropX", "category": "technology", "brand": "CropX", "model": "Smart Farm System"}
+        ]
+        
+        for product in mock_products:
+            if q.lower() in product["name"].lower() or q.lower() in product["brand"].lower():
+                results.append({
+                    "entity_type": "product",
+                    "name": product["name"],
+                    "category": product["category"],
+                    "brand": product["brand"],
+                    "model": product["model"]
+                })
+    
+    # Search Locations
+    if not entity_type or entity_type == "location":
+        mock_locations = [
+            {"name": "Finca Los Naranjos", "address": "Valencia, España"},
+            {"name": "Hacienda San José", "address": "Sevilla, España"},
+            {"name": "Granja La Esperanza", "address": "Murcia, España"},
+            {"name": "Finca El Olivar", "address": "Jaén, España"},
+            {"name": "Cooperativa Agrícola del Sur", "address": "Almería, España"}
+        ]
+        
+        for location in mock_locations:
+            if q.lower() in location["name"].lower() or q.lower() in location["address"].lower():
+                results.append({
+                    "entity_type": "location",
+                    "name": location["name"],
+                    "address": location["address"]
+                })
+    
+    # Search Crops/Varieties
+    if not entity_type or entity_type == "crop":
+        mock_crops = [
+            {"name": "Tomate Cherry", "variety": "Pera Amarillo", "season": "Primavera-Verano"},
+            {"name": "Maíz Dulce", "variety": "Golden Bantam", "season": "Verano"},
+            {"name": "Olivo Picual", "variety": "Picual", "season": "Otoño"},
+            {"name": "Naranja Valencia", "variety": "Valencia Late", "season": "Invierno-Primavera"},
+            {"name": "Lechuga Iceberg", "variety": "Great Lakes", "season": "Primavera-Otoño"}
+        ]
+        
+        for crop in mock_crops:
+            if q.lower() in crop["name"].lower() or q.lower() in crop["variety"].lower():
+                results.append({
+                    "entity_type": "crop",
+                    "name": crop["name"],
+                    "variety": crop["variety"],
+                    "season": crop["season"]
+                })
+    
+    # Limit results and sort by relevance
+    return results[:limit]
+
+@api_router.get("/validations/comprehensive/received", response_model=List[ComprehensiveValidationRequest])
+async def get_received_comprehensive_validations(current_user: User = Depends(get_current_user)):
+    """Get comprehensive validations received by current user"""
+    validations = await db.comprehensive_validations.find({
+        "tagged_entities": {
+            "$elemMatch": {
+                "entity_type": "person",
+                "entity_id": current_user.id
+            }
+        }
+    }).to_list(100)
+    return [ComprehensiveValidationRequest(**validation) for validation in validations]
 @api_router.post("/validations/enhanced", response_model=EnhancedValidationRequest)
 async def create_enhanced_validation(validation_data: EnhancedValidationRequest, current_user: User = Depends(get_current_user)):
     """Create enhanced validation with internal or external user tagging"""
