@@ -147,6 +147,16 @@ function App() {
             } 
           />
           <Route 
+            path="/comprehensive" 
+            element={
+              user ? (
+                <ComprehensiveValidations user={user} />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            } 
+          />
+          <Route 
             path="/search" 
             element={
               user ? (
