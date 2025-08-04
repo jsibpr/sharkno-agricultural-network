@@ -217,6 +217,59 @@ class EnhancedValidationRequest(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
 
+# Enhanced tagging system for comprehensive validation
+class TaggedEntity(BaseModel):
+    entity_type: str  # "person", "company", "product", "location", "crop"
+    entity_id: Optional[str] = None  # Internal ID if exists in our system
+    name: str
+    # Person-specific fields
+    title: Optional[str] = None
+    platform: Optional[str] = None  # "sharkno", "linkedin", "email"
+    profile_url: Optional[str] = None
+    email: Optional[str] = None
+    # Company-specific fields
+    industry: Optional[str] = None
+    website: Optional[str] = None
+    # Product-specific fields
+    category: Optional[str] = None  # "equipment", "seed", "fertilizer", "technology"
+    brand: Optional[str] = None
+    model: Optional[str] = None
+    # Location-specific fields
+    address: Optional[str] = None
+    coordinates: Optional[str] = None
+    # Crop-specific fields
+    variety: Optional[str] = None
+    season: Optional[str] = None
+
+class ComprehensiveValidationRequest(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    
+    # Core validation info
+    skill_id: str
+    validator_id: str
+    description: str
+    
+    # Comprehensive tagging system
+    tagged_entities: List[TaggedEntity] = []  # Can tag multiple entities
+    
+    # Project context
+    project_experience_id: Optional[str] = None
+    project_name: Optional[str] = None
+    collaboration_period: Optional[str] = None
+    specific_achievements: Optional[str] = None
+    working_relationship: Optional[str] = None
+    
+    # Results and impact
+    quantified_results: Optional[str] = None  # "Increased yield by 25%"
+    impact_metrics: List[str] = []  # ["water_savings", "cost_reduction", "yield_increase"]
+    
+    # Status and notifications
+    status: ValidationStatus = ValidationStatus.PENDING
+    notifications_sent: List[str] = []  # Track which entities were notified
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+
 # Keep old ValidationRequest for backward compatibility (deprecated)
 class ValidationRequest(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
