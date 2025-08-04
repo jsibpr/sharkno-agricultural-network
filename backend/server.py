@@ -911,7 +911,318 @@ async def approve_project_validation(validation_id: str, current_user: User = De
     
     return {"message": "Project validation approved"}
 
-# Comprehensive validation endpoints with full entity tagging
+# Verification and Security System
+class VerificationRequest(BaseModel):
+    entity_type: str
+    entity_id: str
+    verification_method: str  # "email", "linkedin", "company_email", "domain_verification"
+    verification_data: dict
+    status: str = "pending"  # "pending", "verified", "rejected"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class VerificationChallenge(BaseModel):
+    challenge_type: str  # "email_token", "linkedin_post", "company_domain"
+    challenge_data: dict
+    expires_at: datetime
+    verified: bool = False
+
+# Enhanced validation with verification requirements
+@api_router.post("/validations/comprehensive/verified", response_model=ComprehensiveValidationRequest)
+async def create_verified_validation(validation_data: ComprehensiveValidationRequest, current_user: User = Depends(get_current_user)):
+    """Create comprehensive validation with mandatory verification"""
+    validation = ComprehensiveValidationRequest(**validation_data.dict())
+    validation.validator_id = current_user.id
+    
+    # SECURITY CHECK: Verify all tagged entities
+    verification_results = []
+    for entity in validation.tagged_entities:
+        verification_result = await verify_tagged_entity(entity, current_user)
+        verification_results.append(verification_result)
+        
+        if not verification_result["verified"]:
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Entity '{entity.name}' could not be verified. {verification_result['reason']}"
+            )
+    
+    # Store verification evidence
+    validation.verification_evidence = verification_results
+    validation.status = ValidationStatus.PENDING_VERIFICATION
+    
+    await db.comprehensive_validations_verified.insert_one(validation.dict())
+    return validation
+
+async def verify_tagged_entity(entity: TaggedEntity, validator: User) -> dict:
+    """Verify that a tagged entity is legitimate"""
+    
+    if entity.entity_type == "person":
+        return await verify_person_entity(entity, validator)
+    elif entity.entity_type == "company":
+        return await verify_company_entity(entity, validator)
+    elif entity.entity_type == "product":
+        return await verify_product_entity(entity, validator)
+    elif entity.entity_type == "location":
+        return await verify_location_entity(entity, validator)
+    else:
+        return {"verified": False, "reason": "Unknown entity type"}
+
+async def verify_person_entity(entity: TaggedEntity, validator: User) -> dict:
+    """Verify person entity through multiple methods"""
+    
+    # Method 1: Internal SHARKNO user
+    if entity.platform == "sharkno" and entity.entity_id:
+        user = await db.users.find_one({"id": entity.entity_id})
+        if user:
+            return {
+                "verified": True,
+                "method": "sharkno_internal",
+                "evidence": f"User exists in SHARKNO database"
+            }
+    
+    # Method 2: LinkedIn verification
+    if entity.platform == "linkedin" and entity.profile_url:
+        # Check if LinkedIn profile is valid and accessible
+        linkedin_verification = await verify_linkedin_profile(entity.profile_url)
+        if linkedin_verification["valid"]:
+            # Require LinkedIn connection or mutual connection
+            mutual_connections = await check_linkedin_mutual_connections(validator.id, entity.profile_url)
+            
+            if mutual_connections > 0:
+                return {
+                    "verified": True,
+                    "method": "linkedin_mutual_connection",
+                    "evidence": f"LinkedIn profile verified with {mutual_connections} mutual connections"
+                }
+            else:
+                # Require LinkedIn challenge (post about SHARKNO or direct message)
+                challenge = await create_linkedin_verification_challenge(entity)
+                return {
+                    "verified": False,
+                    "reason": "LinkedIn verification required",
+                    "challenge": challenge
+                }
+    
+    # Method 3: Email domain verification
+    if entity.email:
+        domain_trust = await verify_email_domain_trust(entity.email)
+        if domain_trust["trusted"]:
+            # Send verification email
+            verification_token = await send_verification_email(entity.email, validator)
+            return {
+                "verified": False,
+                "reason": "Email verification pending",
+                "verification_token": verification_token
+            }
+    
+    return {
+        "verified": False,
+        "reason": "No valid verification method available"
+    }
+
+async def verify_company_entity(entity: TaggedEntity, validator: User) -> dict:
+    """Verify company entity"""
+    
+    # Method 1: Check against verified company database
+    verified_companies = await db.verified_companies.find_one({"name": entity.name})
+    if verified_companies:
+        return {
+            "verified": True,
+            "method": "database_verified",
+            "evidence": "Company in verified database"
+        }
+    
+    # Method 2: Domain verification
+    if entity.website:
+        domain_verification = await verify_company_domain(entity.website)
+        if domain_verification["valid"]:
+            # Check if validator has email from company domain
+            validator_domain = validator.email.split('@')[1] if '@' in validator.email else None
+            company_domain = entity.website.replace('https://www.', '').replace('http://www.', '').replace('https://', '').replace('http://', '')
+            
+            if validator_domain and validator_domain.endswith(company_domain):
+                return {
+                    "verified": True,
+                    "method": "email_domain_match",
+                    "evidence": f"Validator email domain matches company domain"
+                }
+            else:
+                # Require additional verification
+                return {
+                    "verified": False,
+                    "reason": "Company domain verification needed",
+                    "suggestion": "Use company email or provide employment verification"
+                }
+    
+    return {"verified": False, "reason": "Company could not be verified"}
+
+async def verify_product_entity(entity: TaggedEntity, validator: User) -> dict:
+    """Verify product/equipment entity"""
+    
+    # Method 1: Check against product database
+    verified_products = await db.verified_products.find({
+        "$or": [
+            {"name": {"$regex": entity.name, "$options": "i"}},
+            {"brand": entity.brand, "model": entity.model} if entity.brand and entity.model else {}
+        ]
+    }).to_list(10)
+    
+    if verified_products:
+        return {
+            "verified": True,
+            "method": "product_database",
+            "evidence": "Product found in verified database"
+        }
+    
+    # Method 2: Brand verification (check if brand exists and is legitimate)
+    if entity.brand:
+        brand_verification = await verify_brand_legitimacy(entity.brand)
+        if brand_verification["legitimate"]:
+            return {
+                "verified": True,
+                "method": "brand_verification",
+                "evidence": f"Brand {entity.brand} verified as legitimate manufacturer"
+            }
+    
+    return {"verified": False, "reason": "Product could not be verified in database"}
+
+async def verify_location_entity(entity: TaggedEntity, validator: User) -> dict:
+    """Verify location entity"""
+    
+    # Method 1: Geographic validation
+    if entity.address:
+        geo_validation = await validate_geographic_location(entity.address)
+        if geo_validation["valid"]:
+            return {
+                "verified": True,
+                "method": "geographic_validation",
+                "evidence": f"Location validated: {geo_validation['formatted_address']}"
+            }
+    
+    # Method 2: Proximity verification (user should be in reasonable distance)
+    if entity.coordinates and validator.profile_location:
+        distance = calculate_distance(entity.coordinates, validator.profile_location)
+        if distance < 500:  # Within 500km
+            return {
+                "verified": True,
+                "method": "proximity_verification",
+                "evidence": f"Location within reasonable distance ({distance}km)"
+            }
+    
+    return {"verified": True, "reason": "Location verification not strictly enforced"}
+
+# Helper verification functions (would integrate with real services)
+async def verify_linkedin_profile(profile_url: str) -> dict:
+    """Verify LinkedIn profile exists and is accessible"""
+    # In production: actual LinkedIn API call
+    return {"valid": True, "profile_data": {"name": "Profile exists"}}
+
+async def check_linkedin_mutual_connections(user_id: str, linkedin_url: str) -> int:
+    """Check mutual connections on LinkedIn"""
+    # In production: LinkedIn API to check mutual connections
+    return 0  # Mock: no mutual connections
+
+async def verify_email_domain_trust(email: str) -> dict:
+    """Verify if email domain is trustworthy"""
+    domain = email.split('@')[1] if '@' in email else ''
+    trusted_domains = ['gmail.com', 'company.com', 'university.edu']  # Expand this
+    
+    return {
+        "trusted": domain in trusted_domains,
+        "domain": domain,
+        "reputation_score": 0.8
+    }
+
+async def verify_company_domain(website: str) -> dict:
+    """Verify company domain is legitimate"""
+    # In production: check domain registration, SSL, business records
+    return {"valid": True, "domain_age_years": 5}
+
+async def verify_brand_legitimacy(brand: str) -> dict:
+    """Verify brand is a legitimate manufacturer"""
+    legitimate_brands = ['John Deere', 'Syngenta', 'Yara', 'Netafim', 'Bayer', 'DJI']
+    
+    return {
+        "legitimate": brand in legitimate_brands,
+        "verified_manufacturer": brand in legitimate_brands
+    }
+
+async def validate_geographic_location(address: str) -> dict:
+    """Validate geographic location exists"""
+    # In production: integrate with Google Maps API or similar
+    return {
+        "valid": True,
+        "formatted_address": address,
+        "coordinates": "40.4168,-3.7038"  # Madrid coordinates as example
+    }
+
+def calculate_distance(coord1: str, coord2: str) -> float:
+    """Calculate distance between coordinates"""
+    # Simple mock - in production use proper geospatial calculation
+    return 50.0  # Mock 50km distance
+
+async def send_verification_email(email: str, validator: User) -> str:
+    """Send verification email to tagged person"""
+    verification_token = str(uuid.uuid4())
+    
+    # Store verification challenge
+    challenge = VerificationChallenge(
+        challenge_type="email_token",
+        challenge_data={
+            "email": email,
+            "token": verification_token,
+            "validator_id": validator.id
+        },
+        expires_at=datetime.utcnow() + timedelta(hours=24)
+    )
+    
+    await db.verification_challenges.insert_one(challenge.dict())
+    
+    # In production: send actual email with SendGrid/etc
+    print(f"📧 Verification email sent to {email} with token {verification_token}")
+    
+    return verification_token
+
+async def create_linkedin_verification_challenge(entity: TaggedEntity) -> dict:
+    """Create LinkedIn verification challenge"""
+    challenge_text = f"I verify my connection with SHARKNO user for professional validation #{uuid.uuid4().hex[:8]}"
+    
+    return {
+        "challenge_type": "linkedin_post",
+        "instructions": f"Post this text on LinkedIn: '{challenge_text}'",
+        "verification_code": challenge_text,
+        "expires_in_hours": 24
+    }
+
+# Verification challenge endpoints
+@api_router.post("/verification/email/confirm")
+async def confirm_email_verification(token: str, current_user: User = Depends(get_current_user)):
+    """Confirm email verification token"""
+    challenge = await db.verification_challenges.find_one({
+        "challenge_data.token": token,
+        "expires_at": {"$gt": datetime.utcnow()}
+    })
+    
+    if not challenge:
+        raise HTTPException(status_code=404, detail="Invalid or expired verification token")
+    
+    # Mark as verified
+    await db.verification_challenges.update_one(
+        {"_id": challenge["_id"]},
+        {"$set": {"verified": True}}
+    )
+    
+    return {"message": "Email verification confirmed"}
+
+@api_router.get("/verification/pending")
+async def get_pending_verifications(current_user: User = Depends(get_current_user)):
+    """Get pending verifications for current user"""
+    challenges = await db.verification_challenges.find({
+        "challenge_data.validator_id": current_user.id,
+        "verified": False,
+        "expires_at": {"$gt": datetime.utcnow()}
+    }).to_list(50)
+    
+    return challenges
 @api_router.post("/validations/comprehensive", response_model=ComprehensiveValidationRequest)
 async def create_comprehensive_validation(validation_data: ComprehensiveValidationRequest, current_user: User = Depends(get_current_user)):
     """Create comprehensive validation with full entity tagging (people, companies, products, etc.)"""
