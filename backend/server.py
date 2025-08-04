@@ -179,6 +179,45 @@ class ProjectValidationRequest(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
 
+# Enhanced validation with external tagging
+class ExternalProfile(BaseModel):
+    platform: str  # "linkedin", "email", "manual"
+    platform_id: Optional[str] = None  # LinkedIn profile ID
+    profile_url: Optional[str] = None  # LinkedIn profile URL
+    email: Optional[str] = None
+    name: str
+    title: Optional[str] = None
+    company: Optional[str] = None
+    invited_to_sharkno: bool = False
+    sharkno_user_id: Optional[str] = None  # If they eventually join
+
+class EnhancedValidationRequest(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    # Core validation info
+    skill_id: str
+    validator_id: str
+    description: str
+    
+    # Enhanced tagging system
+    validated_user_id: Optional[str] = None  # For internal SHARKNO users
+    external_profile: Optional[ExternalProfile] = None  # For external users
+    
+    # Project context
+    project_experience_id: Optional[str] = None
+    project_name: Optional[str] = None
+    collaboration_period: Optional[str] = None
+    specific_achievements: Optional[str] = None
+    working_relationship: Optional[str] = None
+    
+    # Status and notifications
+    status: ValidationStatus = ValidationStatus.PENDING
+    external_invited: bool = False
+    external_notification_sent: bool = False
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+
+# Keep old ValidationRequest for backward compatibility (deprecated)
 class ValidationRequest(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     # Enhanced validation with project context
