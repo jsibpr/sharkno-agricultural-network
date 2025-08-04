@@ -8,6 +8,7 @@ import Profile from './components/Profile';
 import Projects from './components/Projects';
 import Services from './components/Services';
 import Validations from './components/Validations';
+import ComprehensiveValidations from './components/ComprehensiveValidations';
 import Search from './components/Search';
 import Integrations from './components/Integrations';
 import Privacy from './components/Privacy';
