@@ -179,7 +179,7 @@ class ProjectValidationRequest(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
 
-# Enhanced validation with external tagging
+# Legacy classes for backward compatibility (deprecated - use ComprehensiveValidationRequest instead)
 class ExternalProfile(BaseModel):
     platform: str  # "linkedin", "email", "manual"
     platform_id: Optional[str] = None  # LinkedIn profile ID
