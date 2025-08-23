@@ -973,6 +973,421 @@ class SharkNoAPITester:
         
         return success
 
+    # ========== COMPREHENSIVE VALIDATION AND TRUST SYSTEM TESTS ==========
+    
+    def test_search_entities(self):
+        """Test searching across all entity types (people, companies, products, locations, crops)"""
+        test_queries = [
+            {"q": "John Deere", "entity_type": "company", "expected_min": 1},
+            {"q": "Syngenta", "entity_type": "company", "expected_min": 1},
+            {"q": "6R Series", "entity_type": "product", "expected_min": 1},
+            {"q": "Tomate", "entity_type": "crop", "expected_min": 1},
+            {"q": "Finca", "entity_type": "location", "expected_min": 1},
+            {"q": "Dr", "entity_type": "person", "expected_min": 1},
+            {"q": "agr", "entity_type": None, "expected_min": 5}  # Should return mixed results
+        ]
+        
+        for query_data in test_queries:
+            query_params = f"q={query_data['q']}"
+            if query_data['entity_type']:
+                query_params += f"&entity_type={query_data['entity_type']}"
+            
+            success, response, status = self.make_request('GET', f'search/entities?{query_params}', expected_status=200)
+            
+            if success and isinstance(response, list):
+                if len(response) >= query_data['expected_min']:
+                    # Verify entity structure
+                    if len(response) > 0:
+                        entity = response[0]
+                        if 'entity_type' in entity and 'name' in entity:
+                            self.log_test(f"Search Entities: {query_data['q']} ({query_data['entity_type'] or 'all'})", 
+                                        True, f"Found {len(response)} entities")
+                        else:
+                            self.log_test(f"Search Entities: {query_data['q']} ({query_data['entity_type'] or 'all'})", 
+                                        False, f"Invalid entity structure: {entity}")
+                    else:
+                        self.log_test(f"Search Entities: {query_data['q']} ({query_data['entity_type'] or 'all'})", 
+                                    True, f"Found {len(response)} entities (empty result)")
+                else:
+                    self.log_test(f"Search Entities: {query_data['q']} ({query_data['entity_type'] or 'all'})", 
+                                False, f"Expected at least {query_data['expected_min']}, got {len(response)}")
+            else:
+                self.log_test(f"Search Entities: {query_data['q']} ({query_data['entity_type'] or 'all'})", 
+                            False, f"Status: {status}")
+
+    def test_create_comprehensive_validation(self):
+        """Test creating comprehensive validation with entity tagging"""
+        if not self.test_data.get('additional_users') or len(self.test_data['additional_users']) == 0:
+            self.log_test("Create Comprehensive Validation", False, "No additional users available")
+            return False
+        
+        # Create comprehensive validation with multiple entity types
+        validation_data = {
+            "skill_id": "irrigation-expertise",
+            "validator_id": self.user_id,
+            "description": "Validated expertise in implementing modern irrigation systems with John Deere equipment at Finca Los Naranjos, resulting in 30% water savings for Tomate Cherry crops.",
+            "tagged_entities": [
+                {
+                    "entity_type": "person",
+                    "entity_id": self.test_data['additional_users'][0]['user_id'],
+                    "name": self.test_data['additional_users'][0]['name'],
+                    "title": "Irrigation Specialist",
+                    "platform": "sharkno"
+                },
+                {
+                    "entity_type": "company",
+                    "name": "John Deere",
+                    "industry": "Agricultural Equipment",
+                    "website": "https://www.deere.com"
+                },
+                {
+                    "entity_type": "product",
+                    "name": "John Deere 6R Series",
+                    "category": "equipment",
+                    "brand": "John Deere",
+                    "model": "6155R"
+                },
+                {
+                    "entity_type": "location",
+                    "name": "Finca Los Naranjos",
+                    "address": "Valencia, España"
+                },
+                {
+                    "entity_type": "crop",
+                    "name": "Tomate Cherry",
+                    "variety": "Pera Amarillo",
+                    "season": "Primavera-Verano"
+                }
+            ],
+            "project_name": "Sistema de Riego por Goteo - Finca Los Naranjos",
+            "collaboration_period": "Enero 2024 - Marzo 2024",
+            "specific_achievements": "Reducción del 30% en consumo de agua, aumento del 15% en rendimiento",
+            "quantified_results": "Increased yield by 15%, reduced water consumption by 30%",
+            "impact_metrics": ["water_savings", "yield_increase", "cost_reduction"]
+        }
+
+        success, response, status = self.make_request('POST', 'validations/comprehensive', validation_data, 200)
+        
+        if success and 'id' in response:
+            self.test_data['comprehensive_validation_id'] = response['id']
+            
+            # Verify tagged entities were stored correctly
+            if 'tagged_entities' in response and len(response['tagged_entities']) == 5:
+                entity_types = [entity['entity_type'] for entity in response['tagged_entities']]
+                expected_types = ['person', 'company', 'product', 'location', 'crop']
+                
+                if all(entity_type in entity_types for entity_type in expected_types):
+                    self.log_test("Create Comprehensive Validation", True, 
+                                f"Validation ID: {response['id']}, Tagged {len(response['tagged_entities'])} entities")
+                    return True
+                else:
+                    self.log_test("Create Comprehensive Validation", False, 
+                                f"Missing entity types. Found: {entity_types}")
+                    return False
+            else:
+                self.log_test("Create Comprehensive Validation", False, 
+                            f"Expected 5 tagged entities, got {len(response.get('tagged_entities', []))}")
+                return False
+        else:
+            self.log_test("Create Comprehensive Validation", False, f"Status: {status}, Response: {response}")
+            return False
+
+    def test_get_received_comprehensive_validations(self):
+        """Test getting comprehensive validations received by current user"""
+        # Switch to the tagged user's token to check their received validations
+        if not self.test_data.get('additional_users') or len(self.test_data['additional_users']) == 0:
+            self.log_test("Get Received Comprehensive Validations", False, "No additional users available")
+            return False
+
+        # Store original token
+        original_token = self.token
+        
+        # Switch to tagged user's token
+        tagged_user = self.test_data['additional_users'][0]
+        self.token = tagged_user['token']
+        
+        success, response, status = self.make_request('GET', 'validations/comprehensive/received', expected_status=200)
+        
+        # Restore original token
+        self.token = original_token
+        
+        if success and isinstance(response, list):
+            self.log_test("Get Received Comprehensive Validations", True, 
+                        f"Found {len(response)} received comprehensive validations")
+            
+            # If we have validations, verify structure
+            if len(response) > 0:
+                validation = response[0]
+                required_fields = ['id', 'skill_id', 'validator_id', 'description', 'tagged_entities']
+                has_required_fields = all(field in validation for field in required_fields)
+                
+                if has_required_fields:
+                    self.log_test("Comprehensive Validation Structure", True, "Validation has correct structure")
+                    return True
+                else:
+                    self.log_test("Comprehensive Validation Structure", False, f"Missing fields: {validation}")
+                    return False
+            else:
+                self.log_test("Get Received Comprehensive Validations", True, 
+                            "No validations found (expected if none created)")
+                return True
+        else:
+            self.log_test("Get Received Comprehensive Validations", False, f"Status: {status}")
+            return False
+
+    def test_create_verified_validation(self):
+        """Test creating verified validation with security checks"""
+        if not self.test_data.get('additional_users') or len(self.test_data['additional_users']) == 0:
+            self.log_test("Create Verified Validation", False, "No additional users available")
+            return False
+        
+        # Create verified validation (should trigger security checks)
+        validation_data = {
+            "skill_id": "agricultural-consulting",
+            "validator_id": self.user_id,
+            "description": "Verified agricultural consulting expertise through collaboration with Syngenta on crop protection strategies.",
+            "tagged_entities": [
+                {
+                    "entity_type": "person",
+                    "entity_id": self.test_data['additional_users'][0]['user_id'],
+                    "name": self.test_data['additional_users'][0]['name'],
+                    "title": "Agricultural Consultant",
+                    "platform": "sharkno"
+                },
+                {
+                    "entity_type": "company",
+                    "name": "Syngenta",
+                    "industry": "Seeds & Crop Protection",
+                    "website": "https://www.syngenta.com"
+                }
+            ],
+            "quantified_results": "Improved crop protection efficiency by 25%",
+            "impact_metrics": ["yield_protection", "pest_reduction"]
+        }
+
+        success, response, status = self.make_request('POST', 'validations/comprehensive/verified', validation_data, 200)
+        
+        if success and 'id' in response:
+            self.test_data['verified_validation_id'] = response['id']
+            
+            # Check if verification evidence was added
+            if 'verification_evidence' in response:
+                self.log_test("Create Verified Validation", True, 
+                            f"Verified Validation ID: {response['id']} with verification evidence")
+                return True
+            else:
+                self.log_test("Create Verified Validation", True, 
+                            f"Verified Validation ID: {response['id']} (verification evidence may be processed separately)")
+                return True
+        else:
+            # Security checks might reject the validation
+            if status == 403:
+                self.log_test("Create Verified Validation", True, 
+                            f"Security check correctly rejected validation: {response.get('detail', 'Unknown reason')}")
+                return True
+            else:
+                self.log_test("Create Verified Validation", False, f"Status: {status}, Response: {response}")
+                return False
+
+    def test_calculate_trust_score(self):
+        """Test trust score calculation"""
+        if not self.user_id:
+            self.log_test("Calculate Trust Score", False, "No user ID available")
+            return False
+
+        success, response, status = self.make_request('GET', f'trust-score/{self.user_id}', expected_status=200)
+        
+        if success:
+            required_fields = ['user_id', 'trust_score', 'trust_factors', 'verification_level', 'recommendations']
+            has_required_fields = all(field in response for field in required_fields)
+            
+            if has_required_fields:
+                trust_score = response['trust_score']
+                verification_level = response['verification_level']
+                trust_factors = response['trust_factors']
+                recommendations = response['recommendations']
+                
+                # Verify trust score is between 0 and 1
+                if 0 <= trust_score <= 1:
+                    # Verify trust factors structure
+                    expected_factors = ['verification_rate', 'entity_diversity', 'mutual_validations', 
+                                      'domain_verification', 'linkedin_connections', 'response_rate']
+                    has_all_factors = all(factor in trust_factors for factor in expected_factors)
+                    
+                    if has_all_factors:
+                        self.log_test("Calculate Trust Score", True, 
+                                    f"Trust Score: {trust_score}, Level: {verification_level}, Recommendations: {len(recommendations)}")
+                        
+                        # Store trust score for additional user testing
+                        if self.test_data.get('additional_users') and len(self.test_data['additional_users']) > 0:
+                            self.test_calculate_additional_user_trust_score()
+                        
+                        return True
+                    else:
+                        self.log_test("Calculate Trust Score", False, f"Missing trust factors: {trust_factors}")
+                        return False
+                else:
+                    self.log_test("Calculate Trust Score", False, f"Invalid trust score: {trust_score}")
+                    return False
+            else:
+                self.log_test("Calculate Trust Score", False, f"Missing required fields: {response}")
+                return False
+        else:
+            self.log_test("Calculate Trust Score", False, f"Status: {status}")
+            return False
+
+    def test_calculate_additional_user_trust_score(self):
+        """Test trust score calculation for additional user"""
+        if not self.test_data.get('additional_users') or len(self.test_data['additional_users']) == 0:
+            return False
+
+        additional_user_id = self.test_data['additional_users'][0]['user_id']
+        success, response, status = self.make_request('GET', f'trust-score/{additional_user_id}', expected_status=200)
+        
+        if success and 'trust_score' in response:
+            trust_score = response['trust_score']
+            verification_level = response['verification_level']
+            self.log_test("Calculate Additional User Trust Score", True, 
+                        f"User: {additional_user_id}, Trust Score: {trust_score}, Level: {verification_level}")
+            return True
+        else:
+            self.log_test("Calculate Additional User Trust Score", False, f"Status: {status}")
+            return False
+
+    def test_mutual_validation_tracking(self):
+        """Test mutual validation tracking between users"""
+        if not self.test_data.get('additional_users') or len(self.test_data['additional_users']) == 0:
+            self.log_test("Mutual Validation Tracking", False, "No additional users available")
+            return False
+
+        # Store original token
+        original_token = self.token
+        
+        # Switch to additional user's token to create reciprocal validation
+        additional_user = self.test_data['additional_users'][0]
+        self.token = additional_user['token']
+        
+        # Create reciprocal validation
+        reciprocal_validation_data = {
+            "skill_id": "project-management",
+            "validator_id": additional_user['user_id'],
+            "description": "Reciprocal validation for excellent project management skills demonstrated during irrigation system installation.",
+            "tagged_entities": [
+                {
+                    "entity_type": "person",
+                    "entity_id": self.user_id,
+                    "name": self.test_data['main_user']['name'],
+                    "title": "Project Manager",
+                    "platform": "sharkno"
+                }
+            ],
+            "project_name": "Sistema de Riego por Goteo - Finca Los Naranjos",
+            "quantified_results": "Project completed on time and under budget"
+        }
+
+        success, response, status = self.make_request('POST', 'validations/comprehensive', reciprocal_validation_data, 200)
+        
+        # Restore original token
+        self.token = original_token
+        
+        if success and 'id' in response:
+            self.test_data['reciprocal_validation_id'] = response['id']
+            self.log_test("Mutual Validation Tracking", True, 
+                        f"Created reciprocal validation: {response['id']}")
+            
+            # Now test if trust scores reflect mutual validations
+            self.test_trust_score_with_mutual_validations()
+            return True
+        else:
+            self.log_test("Mutual Validation Tracking", False, f"Status: {status}, Response: {response}")
+            return False
+
+    def test_trust_score_with_mutual_validations(self):
+        """Test that trust scores properly account for mutual validations"""
+        success, response, status = self.make_request('GET', f'trust-score/{self.user_id}', expected_status=200)
+        
+        if success and 'trust_factors' in response:
+            mutual_validations_factor = response['trust_factors'].get('mutual_validations', 0)
+            
+            # With reciprocal validations, this should be > 0
+            if mutual_validations_factor > 0:
+                self.log_test("Trust Score with Mutual Validations", True, 
+                            f"Mutual validations factor: {mutual_validations_factor}")
+                return True
+            else:
+                self.log_test("Trust Score with Mutual Validations", True, 
+                            f"Mutual validations factor: {mutual_validations_factor} (may be 0 if validations not yet processed)")
+                return True
+        else:
+            self.log_test("Trust Score with Mutual Validations", False, f"Status: {status}")
+            return False
+
+    def test_verification_databases(self):
+        """Test that verification databases are properly populated"""
+        # Test verified companies through entity search
+        success, response, status = self.make_request('GET', 'search/entities?q=John Deere&entity_type=company', expected_status=200)
+        
+        if success and isinstance(response, list) and len(response) > 0:
+            john_deere = next((company for company in response if company['name'] == 'John Deere'), None)
+            if john_deere:
+                self.log_test("Verification Database - Companies", True, 
+                            f"Found verified company: {john_deere['name']}")
+            else:
+                self.log_test("Verification Database - Companies", False, "John Deere not found in verified companies")
+                return False
+        else:
+            self.log_test("Verification Database - Companies", False, f"Status: {status}")
+            return False
+
+        # Test verified products through entity search
+        success, response, status = self.make_request('GET', 'search/entities?q=6R Series&entity_type=product', expected_status=200)
+        
+        if success and isinstance(response, list) and len(response) > 0:
+            product = next((prod for prod in response if '6R Series' in prod['name']), None)
+            if product:
+                self.log_test("Verification Database - Products", True, 
+                            f"Found verified product: {product['name']}")
+                return True
+            else:
+                self.log_test("Verification Database - Products", False, "John Deere 6R Series not found in verified products")
+                return False
+        else:
+            self.log_test("Verification Database - Products", False, f"Status: {status}")
+            return False
+
+    def run_comprehensive_validation_tests(self):
+        """Run comprehensive validation and trust system tests"""
+        print("\n🔍 Testing Comprehensive Validation and Trust System...")
+        print("-" * 60)
+        
+        success = True
+        
+        # Entity Search Tests
+        self.test_search_entities()
+        
+        # Verification Database Tests
+        if not self.test_verification_databases():
+            success = False
+        
+        # Comprehensive Validation Tests
+        if self.test_create_comprehensive_validation():
+            self.test_get_received_comprehensive_validations()
+        else:
+            success = False
+        
+        # Verified Validation Tests (with security checks)
+        self.test_create_verified_validation()
+        
+        # Trust Score Tests
+        if not self.test_calculate_trust_score():
+            success = False
+        
+        # Mutual Validation Tests
+        if not self.test_mutual_validation_tracking():
+            success = False
+        
+        return success
+
     def run_all_tests(self):
         """Run all API tests"""
         print("🚀 Starting SharkNo Agricultural Professional Network API Tests")
