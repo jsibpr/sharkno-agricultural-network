@@ -2,6 +2,7 @@
 
 import requests
 import json
+import time
 
 # Test entity search endpoint
 base_url = "https://agriexperts.preview.emergentagent.com"
@@ -10,7 +11,7 @@ api_url = f"{base_url}/api"
 # First register a user to get a token
 user_data = {
     "role": "farmer",
-    "email": "test_entity@test.com",
+    "email": f"test_entity_{int(time.time())}@test.com",
     "name": "Test User",
     "password": "TestPass123!"
 }
