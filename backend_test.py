@@ -1433,6 +1433,9 @@ class SharkNoAPITester:
             # Project-Based Validation System tests
             self.run_project_validation_tests()
 
+            # Comprehensive Validation and Trust System tests
+            self.run_comprehensive_validation_tests()
+
         # Print final results
         print("\n" + "=" * 70)
         print(f"📊 Test Results: {self.tests_passed}/{self.tests_run} tests passed")
