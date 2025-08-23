@@ -1384,6 +1384,8 @@ async def search_entities(
                 })
     
     # Limit results and sort by relevance
+    return results[:limit]
+
 # Initialize verification databases on startup
 @api_router.on_event("startup")
 async def initialize_verification_databases():
