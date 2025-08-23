@@ -1336,7 +1336,7 @@ class SharkNoAPITester:
                 self.log_test("Verification Database - Companies", False, "John Deere not found in verified companies")
                 return False
         else:
-            self.log_test("Verification Database - Companies", False, f"Status: {status}")
+            self.log_test("Verification Database - Companies", False, f"Status: {status}, Response: {response}")
             return False
 
         # Test verified products through entity search
@@ -1352,7 +1352,7 @@ class SharkNoAPITester:
                 self.log_test("Verification Database - Products", False, "John Deere 6R Series not found in verified products")
                 return False
         else:
-            self.log_test("Verification Database - Products", False, f"Status: {status}")
+            self.log_test("Verification Database - Products", False, f"Status: {status}, Response: {response}")
             return False
 
     def run_comprehensive_validation_tests(self):
