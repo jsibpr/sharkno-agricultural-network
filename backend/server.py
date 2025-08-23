@@ -266,6 +266,7 @@ class ComprehensiveValidationRequest(BaseModel):
     # Status and notifications
     status: ValidationStatus = ValidationStatus.PENDING
     notifications_sent: List[str] = []  # Track which entities were notified
+    verification_evidence: Optional[List[Dict]] = None  # Store verification results
     
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
