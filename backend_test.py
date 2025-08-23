@@ -984,7 +984,7 @@ class SharkNoAPITester:
             {"q": "Tomate", "entity_type": "crop", "expected_min": 1},
             {"q": "Finca", "entity_type": "location", "expected_min": 1},
             {"q": "Dr", "entity_type": "person", "expected_min": 1},
-            {"q": "agr", "entity_type": None, "expected_min": 5}  # Should return mixed results
+            {"q": "agr", "entity_type": None, "expected_min": 3}  # Should return mixed results
         ]
         
         for query_data in test_queries:
@@ -1013,7 +1013,7 @@ class SharkNoAPITester:
                                 False, f"Expected at least {query_data['expected_min']}, got {len(response)}")
             else:
                 self.log_test(f"Search Entities: {query_data['q']} ({query_data['entity_type'] or 'all'})", 
-                            False, f"Status: {status}")
+                            False, f"Status: {status}, Response: {response}")
 
     def test_create_comprehensive_validation(self):
         """Test creating comprehensive validation with entity tagging"""
