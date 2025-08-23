@@ -88,6 +88,7 @@ class ValidationStatus(str, Enum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
+    PENDING_VERIFICATION = "pending_verification"
 
 # Pydantic Models
 class UserBase(BaseModel):
