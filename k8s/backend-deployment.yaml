@@ -1,0 +1,145 @@
+# SHARKNO Backend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sharkno-backend
+  namespace: sharkno
+  labels:
+    app: sharkno-backend
+    version: v1
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: sharkno-backend
+  template:
+    metadata:
+      labels:
+        app: sharkno-backend
+        version: v1
+    spec:
+      containers:
+      - name: sharkno-backend
+        image: gcr.io/PROJECT_ID/sharkno-backend:latest
+        ports:
+        - containerPort: 8001
+          protocol: TCP
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: MONGO_URL
+          valueFrom:
+            secretKeyRef:
+              name: sharkno-secrets
+              key: mongo-url
+        - name: DB_NAME
+          value: "sharkno_agricultural_prod"
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: sharkno-secrets
+              key: jwt-secret
+        - name: LINKEDIN_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: sharkno-secrets
+              key: linkedin-client-id
+        - name: LINKEDIN_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: sharkno-secrets
+              key: linkedin-client-secret
+        - name: LINKEDIN_REDIRECT_URI
+          value: "https://app.sharkno.com/api/auth/linkedin/callback"
+        - name: FRONTEND_URL
+          value: "https://app.sharkno.com"
+        - name: SENDGRID_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sharkno-secrets
+              key: sendgrid-api-key
+        - name: SENTRY_DSN
+          valueFrom:
+            secretKeyRef:
+              name: sharkno-secrets
+              key: sentry-dsn
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sharkno-backend-service
+  namespace: sharkno
+  labels:
+    app: sharkno-backend
+spec:
+  selector:
+    app: sharkno-backend
+  ports:
+  - name: http
+    port: 8001
+    targetPort: 8001
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: sharkno-backend-hpa
+  namespace: sharkno
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sharkno-backend
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
