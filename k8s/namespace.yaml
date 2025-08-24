@@ -1,0 +1,9 @@
+# Kubernetes namespace for SHARKNO
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sharkno
+  labels:
+    name: sharkno
+    environment: production
+    app: sharkno-agricultural-network
