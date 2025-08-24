@@ -1,0 +1,135 @@
+# SHARKNO AWS Application Load Balancer Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sharkno-ingress
+  namespace: sharkno
+  labels:
+    app: sharkno
+    environment: production
+  annotations:
+    # AWS Load Balancer Controller
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    
+    # SSL Configuration
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-west-2:ACCOUNT_ID:certificate/CERTIFICATE_ID
+    
+    # Health Checks
+    alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+    alb.ingress.kubernetes.io/healthcheck-port: traffic-port
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '15'
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '5'
+    alb.ingress.kubernetes.io/healthy-threshold-count: '2'
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: '3'
+    
+    # Performance and Security
+    alb.ingress.kubernetes.io/load-balancer-attributes: |
+      deletion_protection.enabled=true,
+      idle_timeout.timeout_seconds=60,
+      routing.http2.enabled=true,
+      access_logs.s3.enabled=true,
+      access_logs.s3.bucket=sharkno-alb-logs,
+      access_logs.s3.prefix=production
+    
+    # Security Groups
+    alb.ingress.kubernetes.io/security-groups: sg-12345678,sg-87654321
+    
+    # Tags
+    alb.ingress.kubernetes.io/tags: |
+      Environment=production,
+      Application=sharkno,
+      Owner=agricultural-network,
+      CostCenter=engineering
+      
+spec:
+  rules:
+  # Main application domain
+  - host: app.sharkno.com
+    http:
+      paths:
+      # API routes to backend
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: sharkno-backend-service
+            port:
+              number: 8001
+      # All other routes to frontend (React Router)
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: sharkno-frontend-service
+            port:
+              number: 80
+  
+  # Dedicated API domain (optional)
+  - host: api.sharkno.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: sharkno-backend-service
+            port:
+              number: 8001
+
+---
+# Network Policy for additional security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sharkno-network-policy
+  namespace: sharkno
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow traffic from ALB
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 8001
+  # Allow inter-service communication
+  - from:
+    - podSelector:
+        matchLabels:
+          app: sharkno-frontend
+    - podSelector:
+        matchLabels:
+          app: sharkno-backend
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 8001
+  egress:
+  # Allow DNS resolution
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow HTTPS outbound (for external APIs)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow MongoDB Atlas connection
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 27017
