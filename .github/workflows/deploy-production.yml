@@ -1,0 +1,155 @@
+# SHARKNO Production Deployment Pipeline
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GKE_CLUSTER: sharkno-production
+  GKE_ZONE: us-central1-a
+  REGISTRY_HOSTNAME: gcr.io
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        cd backend
+        pip install -r requirements.txt
+
+    - name: Run backend tests
+      run: |
+        cd backend
+        pytest tests/ -v
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        yarn install
+
+    - name: Run frontend tests
+      run: |
+        cd frontend
+        yarn test --coverage --watchAll=false
+
+    - name: Build frontend
+      run: |
+        cd frontend
+        yarn build
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Set up Google Cloud CLI
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+    - name: Configure Docker to use gcloud as credential helper
+      run: |
+        gcloud auth configure-docker
+
+    - name: Get GKE credentials
+      run: |
+        gcloud container clusters get-credentials "$GKE_CLUSTER" --zone "$GKE_ZONE"
+
+    - name: Build Backend Docker image
+      run: |
+        docker build -t "$REGISTRY_HOSTNAME/$PROJECT_ID/sharkno-backend:$GITHUB_SHA" \
+          -t "$REGISTRY_HOSTNAME/$PROJECT_ID/sharkno-backend:latest" \
+          -f Dockerfile.backend .
+
+    - name: Build Frontend Docker image
+      run: |
+        docker build -t "$REGISTRY_HOSTNAME/$PROJECT_ID/sharkno-frontend:$GITHUB_SHA" \
+          -t "$REGISTRY_HOSTNAME/$PROJECT_ID/sharkno-frontend:latest" \
+          -f Dockerfile.frontend .
+
+    - name: Push Backend Docker image
+      run: |
+        docker push "$REGISTRY_HOSTNAME/$PROJECT_ID/sharkno-backend:$GITHUB_SHA"
+        docker push "$REGISTRY_HOSTNAME/$PROJECT_ID/sharkno-backend:latest"
+
+    - name: Push Frontend Docker image
+      run: |
+        docker push "$REGISTRY_HOSTNAME/$PROJECT_ID/sharkno-frontend:$GITHUB_SHA"
+        docker push "$REGISTRY_HOSTNAME/$PROJECT_ID/sharkno-frontend:latest"
+
+    - name: Deploy to GKE
+      run: |
+        # Apply namespace
+        kubectl apply -f k8s/namespace.yaml
+        
+        # Apply secrets (if not exists)
+        kubectl get secret sharkno-secrets -n sharkno || \
+        kubectl create secret generic sharkno-secrets \
+          --from-literal=mongo-url="${{ secrets.MONGO_URL }}" \
+          --from-literal=jwt-secret="${{ secrets.JWT_SECRET }}" \
+          --from-literal=linkedin-client-id="${{ secrets.LINKEDIN_CLIENT_ID }}" \
+          --from-literal=linkedin-client-secret="${{ secrets.LINKEDIN_CLIENT_SECRET }}" \
+          --from-literal=sendgrid-api-key="${{ secrets.SENDGRID_API_KEY }}" \
+          --from-literal=sentry-dsn="${{ secrets.SENTRY_DSN }}" \
+          --namespace=sharkno
+        
+        # Update image tags in deployments
+        sed -i "s|gcr.io/PROJECT_ID|$REGISTRY_HOSTNAME/$PROJECT_ID|g" k8s/backend-deployment.yaml
+        sed -i "s|gcr.io/PROJECT_ID|$REGISTRY_HOSTNAME/$PROJECT_ID|g" k8s/frontend-deployment.yaml
+        sed -i "s|:latest|:$GITHUB_SHA|g" k8s/backend-deployment.yaml
+        sed -i "s|:latest|:$GITHUB_SHA|g" k8s/frontend-deployment.yaml
+        
+        # Apply deployments
+        kubectl apply -f k8s/backend-deployment.yaml
+        kubectl apply -f k8s/frontend-deployment.yaml
+        kubectl apply -f k8s/ingress.yaml
+        
+        # Wait for deployments to be ready
+        kubectl rollout status deployment/sharkno-backend -n sharkno --timeout=300s
+        kubectl rollout status deployment/sharkno-frontend -n sharkno --timeout=300s
+        
+        # Get service status
+        kubectl get services -n sharkno
+
+    - name: Verify deployment
+      run: |
+        kubectl get pods -n sharkno
+        kubectl get ingress -n sharkno
+
+  notify:
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+    - name: Notify deployment status
+      run: |
+        if [ "${{ needs.build-and-deploy.result }}" == "success" ]; then
+          echo "✅ SHARKNO deployed successfully to production!"
+          echo "🌐 Frontend: https://app.sharkno.com"
+          echo "🔗 API: https://api.sharkno.com"
+        else
+          echo "❌ Deployment failed!"
+        fi
