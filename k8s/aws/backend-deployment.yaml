@@ -1,0 +1,179 @@
+# SHARKNO Backend Deployment for AWS EKS
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sharkno-backend
+  namespace: sharkno
+  labels:
+    app: sharkno-backend
+    version: v1
+    environment: production
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: sharkno-backend
+  template:
+    metadata:
+      labels:
+        app: sharkno-backend
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: sharkno-backend-sa
+      containers:
+      - name: sharkno-backend
+        image: 123456789012.dkr.ecr.us-west-2.amazonaws.com/sharkno/backend:latest
+        ports:
+        - containerPort: 8001
+          protocol: TCP
+          name: http
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: AWS_REGION
+          value: "us-west-2"
+        - name: MONGO_URL
+          valueFrom:
+            secretKeyRef:
+              name: sharkno-secrets
+              key: mongo-url
+        - name: DB_NAME
+          value: "sharkno_agricultural_prod"
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: sharkno-secrets
+              key: jwt-secret
+        - name: LINKEDIN_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: sharkno-secrets
+              key: linkedin-client-id
+        - name: LINKEDIN_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: sharkno-secrets
+              key: linkedin-client-secret
+        - name: LINKEDIN_REDIRECT_URI
+          value: "https://app.sharkno.com/api/auth/linkedin/callback"
+        - name: FRONTEND_URL
+          value: "https://app.sharkno.com"
+        - name: SENDGRID_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sharkno-secrets
+              key: sendgrid-api-key
+        - name: SENTRY_DSN
+          valueFrom:
+            secretKeyRef:
+              name: sharkno-secrets
+              key: sentry-dsn
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+            ephemeral-storage: "1Gi"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+            ephemeral-storage: "2Gi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sharkno-backend-service
+  namespace: sharkno
+  labels:
+    app: sharkno-backend
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+spec:
+  selector:
+    app: sharkno-backend
+  ports:
+  - name: http
+    port: 8001
+    targetPort: 8001
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: sharkno-backend-hpa
+  namespace: sharkno
+  labels:
+    app: sharkno-backend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sharkno-backend
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 4
+        periodSeconds: 15
+      selectPolicy: Max
