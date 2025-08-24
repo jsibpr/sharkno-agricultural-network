@@ -1,0 +1,79 @@
+# SHARKNO AWS RBAC Configuration
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sharkno-backend-sa
+  namespace: sharkno
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/SharknoBackendRole
+  labels:
+    app: sharkno-backend
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sharkno-frontend-sa
+  namespace: sharkno
+  labels:
+    app: sharkno-frontend
+
+---
+# Role for backend service account
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sharkno-backend-role
+  namespace: sharkno
+rules:
+- apiGroups: [""]
+  resources: ["secrets", "configmaps"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+
+---
+# RoleBinding for backend
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sharkno-backend-role-binding
+  namespace: sharkno
+subjects:
+- kind: ServiceAccount
+  name: sharkno-backend-sa
+  namespace: sharkno
+roleRef:
+  kind: Role
+  name: sharkno-backend-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ClusterRole for AWS Load Balancer Controller (if not already exists)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aws-load-balancer-controller
+rules:
+- apiGroups: [""]
+  resources: ["endpoints"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["extensions", "networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["extensions", "networking.k8s.io"]
+  resources: ["ingresses/status"]
+  verbs: ["update", "patch"]
